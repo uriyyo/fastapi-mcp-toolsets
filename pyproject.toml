@@ -6,9 +6,25 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.143.0",
+    "fastapi-has-permissions>=0.4.1",
     "fastapi-injected>=0.3.6",
     "mcp>=2.3.0",
     "pydantic-ai-slim>=2.54.0",
+]
+
+[project.optional-dependencies]
+oauth = [
+    "cryptography>=42.0.0",
+    "httpx2>=2.10.0",
+    "pyjwt[crypto]>=2.10.1",
+]
+oauth-redis = [
+    "fastapi-mcp-toolsets[oauth]",
+    "redis>=5.0.0",
+]
+oauth-sqlalchemy = [
+    "fastapi-mcp-toolsets[oauth]",
+    "sqlalchemy[asyncio]>=2.0.0",
 ]
 
 [build-system]
@@ -25,6 +41,8 @@ dev = [
     "ruff>=0.16.10",
     "ty>=0.0.85",
     "uvicorn>=0.54.0",
+    "aiosqlite>=0.20.0",
+    "fakeredis>=2.26.0",
 ]
 
 [tool.ruff]

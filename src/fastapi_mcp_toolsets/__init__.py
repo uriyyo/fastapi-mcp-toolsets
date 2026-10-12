@@ -20,7 +20,7 @@ from .server import (
     MCPHandlers,
     ToolManagerScope,
 )
-from .transport import MCPRoute, MCPRouter
+from .transport import MCPExtension, MCPRoute, MCPRouter
 
 __all__ = [
     "AssistantMessage",
@@ -32,6 +32,7 @@ __all__ = [
     "MCPAdapter",
     "MCPContext",
     "MCPDeps",
+    "MCPExtension",
     "MCPHandler",
     "MCPHandlers",
     "MCPPrompts",

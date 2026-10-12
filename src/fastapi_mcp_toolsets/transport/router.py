@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncGenerator, Callable, Coroutine, Sequence
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
-from typing import Annotated, Any, Final, Literal, cast
+from typing import Annotated, Any, Final, Literal, Protocol, cast, runtime_checkable
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Request, Response, status
 from fastapi.encoders import jsonable_encoder
@@ -126,6 +126,23 @@ class RequestEnvelope:
     client_info: Implementation | None = None
 
 
+@runtime_checkable
+class MCPExtension(Protocol):
+    """Something served next to the endpoint as an `APIRouter`: an authorization server, a protected resource.
+
+    An extension may also declare a `lifespan`, an async context manager taking the app, which runs within the
+    router's own; an `APIRouter` extension's `lifespan_context` is merged by `include_router` itself.
+    """
+
+    @property
+    def router(self) -> APIRouter: ...
+
+
+def lifespan_of(obj: Any) -> Lifespan[Any] | None:
+    """The `lifespan` an object declares, if any."""
+    return getattr(obj, "lifespan", None)
+
+
 class MCPRouter(APIRouter):
     def __init__(
         self,
@@ -136,6 +153,8 @@ class MCPRouter(APIRouter):
         sse_ping_interval: float = 15,
         security: TransportSecuritySettings | None = None,
         lifespan: Lifespan[Any] | None = None,
+        dependencies: Sequence[Any] | None = None,
+        extensions: Sequence[APIRouter | MCPExtension] = (),
         **kwargs: Any,
     ) -> None:
         self.adapter = adapter
@@ -143,23 +162,61 @@ class MCPRouter(APIRouter):
         self.sse_ping_interval = sse_ping_interval
         self.security = TransportSecurityMiddleware(security)
 
-        kwargs.setdefault("route_class", MCPRoute)
-        super().__init__(lifespan=self._merge_lifespan(lifespan), **kwargs)
+        self.extensions = [*extensions]
+        self.dependencies_ = [*(dependencies or ())]
 
+        kwargs.setdefault("route_class", MCPRoute)
+
+        super().__init__(
+            lifespan=self._merge_lifespan(lifespan),
+            **kwargs,
+        )
+
+        # `dependencies` guard the MCP endpoint alone, not the extensions served alongside it; the inject scope
+        # comes first so they already resolve inside it.
         self.post(
             path,
             name="mcp",
             summary="MCP endpoint",
             description=f"Serves the `{adapter.name}` MCP server over Streamable HTTP.",
             responses=OPENAPI_RESPONSES,
-            dependencies=[
-                Depends(init_inject_scope),
-            ],
+            dependencies=[Depends(init_inject_scope), *self.dependencies_],
         )(self._handle_post)
+
+        for extension in self.extensions:
+            self.extend(extension)
+
+    def extend(self, extension: APIRouter | MCPExtension) -> None:
+        """Serve an extension's routes next to the endpoint, outside this router's own prefix.
+
+        Discovery documents live at `/.well-known/...` whatever path the endpoint has, so a prefix given to
+        this router does not apply to them; one given at `app.include_router(...)` still does.
+        """
+        router = extension if isinstance(extension, APIRouter) else extension.router
+        prefix, self.prefix = self.prefix, ""
+
+        try:
+            self.include_router(router)
+        finally:
+            self.prefix = prefix
+
+    def extension_lifespans(self) -> list[Lifespan[Any]]:
+        # An `APIRouter` extension's lifespan is already merged by `include_router`; a dependency's is the one
+        # its callable declares, e.g. a bearer whose verifier discovers its keys at startup.
+        extensions = (extension for extension in self.extensions if not isinstance(extension, APIRouter))
+        callables = (getattr(dependency, "dependency", dependency) for dependency in self.dependencies_)
+
+        return [lifespan for obj in (*extensions, *callables) if (lifespan := lifespan_of(obj)) is not None]
 
     @asynccontextmanager
     async def adapter_lifespan(self, app: FastAPI) -> AsyncGenerator[None]:
-        async with self.adapter.lifespan(app):
+        # The adapter first, then the extensions, so the given lifespan can already use them all.
+        async with AsyncExitStack() as stack:
+            await stack.enter_async_context(self.adapter.lifespan(app))
+
+            for lifespan in self.extension_lifespans():
+                await stack.enter_async_context(lifespan(app))
+
             yield
 
     def _merge_lifespan(self, lifespan: Lifespan[Any] | None) -> Lifespan[Any]:
@@ -168,7 +225,6 @@ class MCPRouter(APIRouter):
 
         @asynccontextmanager
         async def merged(app: Any) -> AsyncGenerator[Any]:
-            # The adapter is entered first, so the given lifespan can already use it.
             async with self.adapter_lifespan(app), lifespan(app) as state:
                 yield state
 

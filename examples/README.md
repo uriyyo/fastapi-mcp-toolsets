@@ -25,6 +25,7 @@ uv run python examples/tools.py
 | [resources.py](resources.py)       | Resources and resource templates, with completion                                                                               |
 | [prompts.py](prompts.py)           | Prompts, with completion                                                                                                        |
 | [gateway.py](gateway.py) | Remote MCP servers (DeepWiki, GitMCP) and local tools behind one endpoint, with hooks for access control, auditing and failures, a per-user quota, approvals, resources and prompts (needs `pydantic-ai-slim[mcp]`) |
+| [oauth.py](oauth.py) | Your own sign-in page turned into an OAuth authorization server for MCP clients (`StoredProvider` with `@provider.authenticate` and `@provider.on.identity`), a bearer `Security` dependency on the MCP route, the token in deps, and per-tool scopes with `GuardedTools` |
 
 Approvals, elicitation, sampling and roots need protocol version 2026-07-28: the call is answered with
 what the server needs, and the client retries it with the answers.
