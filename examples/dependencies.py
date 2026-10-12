@@ -8,7 +8,7 @@ from fastapi import FastAPI, Header
 from fastapi_injected import Dep, DepFactory
 from pydantic_ai import RunContext
 
-from fastapi_mcp_toolsets import MCPAdapter, MCPRouter
+from fastapi_mcp_toolsets import MCPRouter, MCPServer
 
 
 @dataclass
@@ -33,10 +33,10 @@ class MyDeps:
     http_client: DepFactory[httpx2.AsyncClient, http_client]
 
 
-adapter = MCPAdapter(deps_type=MyDeps, name="jokes")
+server = MCPServer(deps_type=MyDeps, name="jokes")
 
 
-@adapter.tool
+@server.tool
 async def get_joke(ctx: RunContext[MyDeps]) -> str:
     """Fetch a joke."""
     response = await ctx.deps.http_client.get(
@@ -48,7 +48,7 @@ async def get_joke(ctx: RunContext[MyDeps]) -> str:
 
 
 app = FastAPI()
-app.include_router(MCPRouter(adapter))
+app.include_router(MCPRouter(server))
 
 
 if __name__ == "__main__":

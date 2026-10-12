@@ -10,7 +10,7 @@ from pydantic import AnyHttpUrl, BaseModel, Field
 from starlette.requests import Request
 
 from fastapi_mcp_toolsets.protocol import MCPProtocolVersion
-from fastapi_mcp_toolsets.server import MCPAdapter
+from fastapi_mcp_toolsets.server import MCPServer
 
 __all__ = [
     "AI_CATALOG_PATH",
@@ -58,9 +58,9 @@ class ServerCard(BaseModel):
     model_config = {"populate_by_name": True}
 
     @classmethod
-    def for_adapter(
+    def for_server(
         cls,
-        adapter: MCPAdapter[Any],
+        server: MCPServer[Any],
         *,
         name: str,
         url: AnyHttpUrl | str,
@@ -68,8 +68,8 @@ class ServerCard(BaseModel):
         protocol_versions: Sequence[MCPProtocolVersion] | None = None,
         **extra: Any,
     ) -> ServerCard:
-        """A card from the adapter's server info, pointing at the Streamable HTTP endpoint at `url`."""
-        info = adapter.server_info
+        """A card from the server's info, pointing at the Streamable HTTP endpoint at `url`."""
+        info = server.server_info
         versions = protocol_versions if protocol_versions is not None else list(MCPProtocolVersion)
 
         return cls(

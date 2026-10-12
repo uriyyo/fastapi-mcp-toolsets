@@ -12,7 +12,7 @@ from fastapi_injected import DepFactory
 from mcp.shared.auth import OAuthClientInformationFull
 from pydantic_ai import RunContext
 
-from fastapi_mcp_toolsets import MCPAdapter, MCPDeps, MCPRouter
+from fastapi_mcp_toolsets import MCPDeps, MCPRouter, MCPServer
 from fastapi_mcp_toolsets.auth import GuardedTools, requires_scopes
 from fastapi_mcp_toolsets.oauth import (
     AccessToken,
@@ -102,25 +102,25 @@ class Deps(MCPDeps):
 
 
 # Tools the token lacks the scopes for are left out of `tools/list` and refused on `tools/call`.
-adapter = MCPAdapter(deps_type=Deps, name="notes", capabilities=[GuardedTools(bearer)])
+server = MCPServer(deps_type=Deps, name="notes", capabilities=[GuardedTools(bearer)])
 
 NOTES: dict[str, dict[str, str]] = defaultdict(dict)
 
 
-@adapter.tool(metadata=requires_scopes("notes:read"))
+@server.tool(metadata=requires_scopes("notes:read"))
 async def list_notes(ctx: RunContext[Deps]) -> list[str]:
     """List the titles of the user's notes."""
     return sorted(NOTES[ctx.deps.user])
 
 
-@adapter.tool(metadata=requires_scopes("notes:write"))
+@server.tool(metadata=requires_scopes("notes:write"))
 async def save_note(ctx: RunContext[Deps], title: str, text: str) -> str:
     """Save a note."""
     NOTES[ctx.deps.user][title] = text
     return f"Saved {title!r} for {ctx.deps.user}"
 
 
-@adapter.tool
+@server.tool
 async def whoami(ctx: RunContext[Deps]) -> str:
     """Who the token belongs to, and what it may do."""
     return f"{ctx.deps.user} ({ctx.deps.token.client_id}) with scopes {' '.join(ctx.deps.token.scopes)}"
@@ -128,7 +128,7 @@ async def whoami(ctx: RunContext[Deps]) -> str:
 
 app = FastAPI()
 # The endpoint, the authorization server's routes and the resource metadata, all from one router.
-app.include_router(MCPRouter(adapter, dependencies=[Security(bearer)], extensions=[auth_server, resource]))
+app.include_router(MCPRouter(server, dependencies=[Security(bearer)], extensions=[auth_server, resource]))
 
 
 LOGIN_PAGE: Final = """

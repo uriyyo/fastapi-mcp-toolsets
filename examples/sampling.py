@@ -3,12 +3,12 @@ from fastapi import FastAPI
 from mcp_types import TextContent
 from pydantic_ai import RunContext
 
-from fastapi_mcp_toolsets import MCPAdapter, MCPDeps, MCPRouter
+from fastapi_mcp_toolsets import MCPDeps, MCPRouter, MCPServer
 
-adapter = MCPAdapter(deps_type=MCPDeps, name="writer")
+server = MCPServer(deps_type=MCPDeps, name="writer")
 
 
-@adapter.tool
+@server.tool
 async def summarize(ctx: RunContext[MCPDeps], text: str) -> str:
     """Summarize the given text in one sentence."""
     result = await ctx.deps.mcp.sample(
@@ -25,7 +25,7 @@ async def summarize(ctx: RunContext[MCPDeps], text: str) -> str:
 
 
 app = FastAPI()
-app.include_router(MCPRouter(adapter))
+app.include_router(MCPRouter(server))
 
 
 if __name__ == "__main__":

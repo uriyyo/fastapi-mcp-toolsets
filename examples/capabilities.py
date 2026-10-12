@@ -8,7 +8,7 @@ from pydantic_ai import RunContext, ToolCallPart, ToolDefinition
 from pydantic_ai.capabilities import AbstractCapability, PrefixTools, ValidatedToolArgs
 from pydantic_ai.toolsets import AgentToolset, FunctionToolset
 
-from fastapi_mcp_toolsets import MCPAdapter, MCPRouter
+from fastapi_mcp_toolsets import MCPRouter, MCPServer
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +56,10 @@ class AuditTools(AbstractCapability[Any]):
 
 
 # Tools are listed as `math_add` and `math_multiply`.
-adapter = MCPAdapter(capabilities=[PrefixTools(MathTools(), prefix="math"), AuditTools()], name="math")
+server = MCPServer(capabilities=[PrefixTools(MathTools(), prefix="math"), AuditTools()], name="math")
 
 app = FastAPI()
-app.include_router(MCPRouter(adapter))
+app.include_router(MCPRouter(server))
 
 
 if __name__ == "__main__":

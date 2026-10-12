@@ -36,7 +36,7 @@ async def instructions(ctx: MCPContext) -> str | None:
 async def discover(_request: DiscoverRequest, ctx: MCPContext) -> DiscoverResult:
     return DiscoverResult(
         supported_versions=[protocol.version for protocol in MCPProtocolVersion.modern()],
-        capabilities=ctx.adapter.capabilities(ctx),
+        capabilities=ctx.server.capabilities(ctx),
         instructions=await instructions(ctx),
     )
 
@@ -45,8 +45,8 @@ async def discover(_request: DiscoverRequest, ctx: MCPContext) -> DiscoverResult
 async def initialize(_request: InitializeRequest, ctx: MCPContext) -> InitializeResult:
     return InitializeResult(
         protocol_version=ctx.protocol_version.version,
-        capabilities=ctx.adapter.capabilities(ctx),
-        server_info=ctx.adapter.server_info,
+        capabilities=ctx.server.capabilities(ctx),
+        server_info=ctx.server.server_info,
         instructions=await instructions(ctx),
     )
 

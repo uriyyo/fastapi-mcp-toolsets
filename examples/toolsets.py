@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi_injected import Dep
 from pydantic_ai import AbstractToolset, FunctionToolset, RunContext
 
-from fastapi_mcp_toolsets import MCPAdapter, MCPRouter, ToolManagerScope
+from fastapi_mcp_toolsets import MCPRouter, MCPServer, ToolManagerScope
 
 weather_toolset = FunctionToolset()
 
@@ -44,7 +44,7 @@ class Deps:
     settings: Dep[Settings]
 
 
-adapter = MCPAdapter(
+server = MCPServer(
     deps_type=Deps,
     toolsets=[datetime_toolset],
     name="weather",
@@ -53,14 +53,14 @@ adapter = MCPAdapter(
 )
 
 
-@adapter.toolset
+@server.toolset
 def weather(ctx: RunContext[Deps]) -> AbstractToolset[Deps]:
     unwanted = "temperature_celsius" if ctx.deps.settings.fahrenheit else "temperature_fahrenheit"
     return weather_toolset.filtered(lambda _ctx, tool_def: tool_def.name != unwanted)
 
 
 app = FastAPI()
-app.include_router(MCPRouter(adapter))
+app.include_router(MCPRouter(server))
 
 
 if __name__ == "__main__":

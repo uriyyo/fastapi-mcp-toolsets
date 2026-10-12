@@ -38,7 +38,7 @@ from pydantic_ai.exceptions import ConcurrencyLimitExceeded
 from starlette.types import Lifespan
 
 from fastapi_mcp_toolsets.protocol import MCPProtocolVersion, jsonrpc_error
-from fastapi_mcp_toolsets.server import MCPAdapter, MCPMessageStream
+from fastapi_mcp_toolsets.server import MCPMessageStream, MCPServer
 
 from .responses import DeferredResponse, error_response, rejection_response
 
@@ -146,7 +146,7 @@ def lifespan_of(obj: Any) -> Lifespan[Any] | None:
 class MCPRouter(APIRouter):
     def __init__(
         self,
-        adapter: MCPAdapter[Any],
+        server: MCPServer[Any],
         *,
         path: str = "/mcp",
         json_response: bool = False,
@@ -157,7 +157,7 @@ class MCPRouter(APIRouter):
         extensions: Sequence[APIRouter | MCPExtension] = (),
         **kwargs: Any,
     ) -> None:
-        self.adapter = adapter
+        self.server = server
         self.json_response = json_response
         self.sse_ping_interval = sse_ping_interval
         self.security = TransportSecurityMiddleware(security)
@@ -178,7 +178,7 @@ class MCPRouter(APIRouter):
             path,
             name="mcp",
             summary="MCP endpoint",
-            description=f"Serves the `{adapter.name}` MCP server over Streamable HTTP.",
+            description=f"Serves the `{server.name}` MCP server over Streamable HTTP.",
             responses=OPENAPI_RESPONSES,
             dependencies=[Depends(init_inject_scope), *self.dependencies_],
         )(self._handle_post)
@@ -209,10 +209,10 @@ class MCPRouter(APIRouter):
         return [lifespan for obj in (*extensions, *callables) if (lifespan := lifespan_of(obj)) is not None]
 
     @asynccontextmanager
-    async def adapter_lifespan(self, app: FastAPI) -> AsyncGenerator[None]:
-        # The adapter first, then the extensions, so the given lifespan can already use them all.
+    async def server_lifespan(self, app: FastAPI) -> AsyncGenerator[None]:
+        # The server first, then the extensions, so the given lifespan can already use them all.
         async with AsyncExitStack() as stack:
-            await stack.enter_async_context(self.adapter.lifespan(app))
+            await stack.enter_async_context(self.server.lifespan(app))
 
             for lifespan in self.extension_lifespans():
                 await stack.enter_async_context(lifespan(app))
@@ -221,11 +221,11 @@ class MCPRouter(APIRouter):
 
     def _merge_lifespan(self, lifespan: Lifespan[Any] | None) -> Lifespan[Any]:
         if lifespan is None:
-            return self.adapter_lifespan
+            return self.server_lifespan
 
         @asynccontextmanager
         async def merged(app: Any) -> AsyncGenerator[Any]:
-            async with self.adapter_lifespan(app), lifespan(app) as state:
+            async with self.server_lifespan(app), lifespan(app) as state:
                 yield state
 
         return cast("Lifespan[Any]", merged)
@@ -282,14 +282,14 @@ class MCPRouter(APIRouter):
     ) -> Response:
         async def serve(stream: MCPMessageStream | None) -> JSONRPCResponse | JSONRPCError:
             try:
-                async with self.adapter.build_context(
+                async with self.server.build_context(
                     protocol_version=envelope.protocol_version,
                     client_capabilities=envelope.client_capabilities,
                     client_info=envelope.client_info,
                     headers=request.headers,
                     stream=stream,
                 ) as ctx:
-                    response = await self.adapter.dispatch(body, ctx)
+                    response = await self.server.dispatch(body, ctx)
             except ConcurrencyLimitExceeded as e:
                 return jsonrpc_error(INTERNAL_ERROR, str(e), request_id=message.id)
             except DependencyResolutionError as e:

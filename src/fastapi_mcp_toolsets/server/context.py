@@ -56,7 +56,7 @@ from fastapi_mcp_toolsets.protocol import MCPProtocolVersion, jsonrpc_notificati
 from .inputs import Elicitation, InputSession, InputUnavailableError, supports_form_elicitation
 
 if TYPE_CHECKING:
-    from .adapter import MCPAdapter
+    from .server import MCPServer
 
 __all__ = [
     "InstructionsResolver",
@@ -73,7 +73,7 @@ LOGGING_LEVELS: Final[tuple[LoggingLevel, ...]] = get_args(LoggingLevel)
 
 @dataclass(kw_only=True)
 class MCPContext:
-    adapter: MCPAdapter[Any]
+    server: MCPServer[Any]
     run_context: RunContext[Any]
     capability: AbstractCapability[Any]
     tool_manager: ToolManager[Any]
@@ -210,7 +210,7 @@ class MCPContext:
     # Using the server from a route, with the same hooks and handlers as over MCP.
 
     async def handle(self, request: Request[Any, Any]) -> Result:
-        return await self.adapter.handle(request, self)
+        return await self.server.handle(request, self)
 
     async def call_tool(
         self,

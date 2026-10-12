@@ -1,11 +1,11 @@
 # Serving an existing agent: its tools, toolsets, capabilities and instructions, with resources and
-# prompts added on the adapter. The agent's model is never called.
+# prompts added on the server. The agent's model is never called.
 from datetime import datetime
 
 from fastapi import FastAPI
 from pydantic_ai import Agent, RunContext
 
-from fastapi_mcp_toolsets import MCPAdapter, MCPRouter, UserMessage
+from fastapi_mcp_toolsets import MCPRouter, MCPServer, UserMessage
 
 agent = Agent(
     "openai:gpt-5",
@@ -29,23 +29,23 @@ def whoami(ctx: RunContext[None]) -> str:
 
 
 # Served under the agent's name; tools and instructions come from the agent.
-adapter = MCPAdapter(agent=agent)
+server = MCPServer(agent=agent)
 
 
-@adapter.resource("agent://model", mime_type="text/plain")
+@server.resource("agent://model", mime_type="text/plain")
 def model() -> str:
     """The model the agent runs on when used as an agent."""
     return str(agent.model)
 
 
-@adapter.prompt
+@server.prompt
 def ask_time() -> UserMessage:
     """Ask what time it is."""
     return UserMessage("What time is it right now?")
 
 
 app = FastAPI()
-app.include_router(MCPRouter(adapter))
+app.include_router(MCPRouter(server))
 
 
 if __name__ == "__main__":

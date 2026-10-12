@@ -20,7 +20,7 @@ from pydantic_ai.capabilities import (
 )
 from pydantic_ai.mcp import MCPToolset
 
-from fastapi_mcp_toolsets import MCPAdapter, MCPDeps, MCPRouter, UserMessage
+from fastapi_mcp_toolsets import MCPDeps, MCPRouter, MCPServer, UserMessage
 
 logger = logging.getLogger("gateway")
 
@@ -137,7 +137,7 @@ class Quota(AbstractCapability[Deps]):
         return args
 
 
-adapter = MCPAdapter(
+server = MCPServer(
     deps_type=Deps,
     name="research-gateway",
     title="Research gateway",
@@ -159,14 +159,14 @@ adapter = MCPAdapter(
 NOTES: dict[str, dict[str, str]] = defaultdict(dict)
 
 
-@adapter.tool(requires_approval=True, metadata={"editors_only": True})
+@server.tool(requires_approval=True, metadata={"editors_only": True})
 async def save_note(ctx: RunContext[Deps], title: str, text: str) -> str:
     """Save a note, after the user approves it."""
     NOTES[ctx.deps.user.name][title] = text
     return f"Saved {title!r}"
 
 
-@adapter.tool
+@server.tool
 async def list_notes(ctx: RunContext[Deps]) -> list[str]:
     """List the titles of the user's notes."""
     return sorted(NOTES[ctx.deps.user.name])
@@ -176,13 +176,13 @@ def note_titles(ctx: RunContext[Deps], value: str, _arguments: object) -> list[s
     return [title for title in NOTES[ctx.deps.user.name] if title.startswith(value)]
 
 
-@adapter.resource("notes://{title}", mime_type="text/markdown", complete={"title": note_titles})
+@server.resource("notes://{title}", mime_type="text/markdown", complete={"title": note_titles})
 def note(ctx: RunContext[Deps], title: str) -> str:
     """A saved note."""
     return NOTES[ctx.deps.user.name].get(title, f"No note titled {title!r}")
 
 
-@adapter.prompt(title="Research a repository")
+@server.prompt(title="Research a repository")
 def research(repo: str, question: str) -> UserMessage:
     """Ask a question about a GitHub repository.
 
@@ -194,7 +194,7 @@ def research(repo: str, question: str) -> UserMessage:
 
 
 app = FastAPI()
-app.include_router(MCPRouter(adapter))
+app.include_router(MCPRouter(server))
 
 
 if __name__ == "__main__":

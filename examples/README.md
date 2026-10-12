@@ -11,8 +11,8 @@ uv run python examples/tools.py
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | [tools.py](tools.py)               | Tools registered on the server, with deps and tool annotations ([tools](https://ai.pydantic.dev/tools/))                        |
 | [toolsets.py](toolsets.py)         | Serving existing toolsets, prepared once per app ([toolsets](https://ai.pydantic.dev/toolsets/))                                                       |
-| [agent.py](agent.py)               | Serving an existing agent's tools and instructions, with resources and prompts added on the adapter ([agents](https://ai.pydantic.dev/agents/)) |
-| [rest.py](rest.py)                 | The same tools from plain REST routes, through the `adapter.context` FastAPI dependency |
+| [agent.py](agent.py)               | Serving an existing agent's tools and instructions, with resources and prompts added on the server ([agents](https://ai.pydantic.dev/agents/)) |
+| [rest.py](rest.py)                 | The same tools from plain REST routes, through the `server.context` FastAPI dependency |
 | [capabilities.py](capabilities.py) | Capabilities providing tools, instructions and hooks ([capabilities](https://ai.pydantic.dev/capabilities/custom/))             |
 | [dependencies.py](dependencies.py) | Deps resolved per request from headers, settings and yield dependencies ([dependencies](https://ai.pydantic.dev/dependencies/)) |
 | [approvals.py](approvals.py)       | Tools that need the user's approval ([deferred tools](https://ai.pydantic.dev/deferred-tools/))                                 |

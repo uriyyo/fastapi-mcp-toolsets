@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi_injected import Dep
 from pydantic_ai import RunContext
 
-from fastapi_mcp_toolsets import MCPAdapter, MCPRouter
+from fastapi_mcp_toolsets import MCPRouter, MCPServer
 
 USERS = {"1": "Ada Lovelace", "2": "Alan Turing", "42": "Grace Hopper"}
 
@@ -20,10 +20,10 @@ class Deps:
     settings: Dep[Settings]
 
 
-adapter = MCPAdapter(deps_type=Deps, name="users")
+server = MCPServer(deps_type=Deps, name="users")
 
 
-@adapter.resource("config://settings", mime_type="application/json")
+@server.resource("config://settings", mime_type="application/json")
 def settings(ctx: RunContext[Deps]) -> Settings:
     """The server's settings."""
     return ctx.deps.settings
@@ -34,14 +34,14 @@ def user_ids(_ctx: RunContext[Deps], value: str, _arguments: object) -> list[str
 
 
 # `{user_id}` makes it a template; its variables are the function's parameters.
-@adapter.resource("users://{user_id}/profile", complete={"user_id": user_ids})
+@server.resource("users://{user_id}/profile", complete={"user_id": user_ids})
 def profile(user_id: str) -> str:
     """A user's profile."""
     return f"{USERS.get(user_id, 'Unknown')} (#{user_id})"
 
 
 app = FastAPI()
-app.include_router(MCPRouter(adapter))
+app.include_router(MCPRouter(server))
 
 
 if __name__ == "__main__":

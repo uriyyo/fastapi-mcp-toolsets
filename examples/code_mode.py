@@ -4,10 +4,10 @@ from typing import TypedDict
 from fastapi import FastAPI
 from pydantic_ai_harness import CodeMode
 
-from fastapi_mcp_toolsets import MCPAdapter, MCPRouter
+from fastapi_mcp_toolsets import MCPRouter, MCPServer
 
 # Per-request scope: the sandbox keeps REPL state per run, which `ToolManagerScope.APP` would share.
-adapter = MCPAdapter(capabilities=[CodeMode()], name="weather-code")
+server = MCPServer(capabilities=[CodeMode()], name="weather-code")
 
 
 # The sandbox type-checks code against the tools' signatures, so precise types help.
@@ -17,20 +17,20 @@ class Weather(TypedDict):
     condition: str
 
 
-@adapter.tool_plain
+@server.tool_plain
 def get_weather(city: str) -> Weather:
     """Get current weather for a city."""
     return Weather(city=city, temp_f=72, condition="sunny")
 
 
-@adapter.tool_plain
+@server.tool_plain
 def get_forecast(city: str, days: int) -> list[int]:
     """Get the forecast high temperatures, in Fahrenheit, for the next days."""
     return [70 + day for day in range(days)]
 
 
 app = FastAPI()
-app.include_router(MCPRouter(adapter))
+app.include_router(MCPRouter(server))
 
 
 if __name__ == "__main__":

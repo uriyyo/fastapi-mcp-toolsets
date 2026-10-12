@@ -5,9 +5,9 @@ from typing import Literal
 from fastapi import FastAPI
 from pydantic_ai import RunContext
 
-from fastapi_mcp_toolsets import MCPAdapter, MCPDeps, MCPRouter
+from fastapi_mcp_toolsets import MCPDeps, MCPRouter, MCPServer
 
-adapter = MCPAdapter(deps_type=MCPDeps, name="pizza")
+server = MCPServer(deps_type=MCPDeps, name="pizza")
 
 
 @dataclass
@@ -16,7 +16,7 @@ class Pizza:
     extra_cheese: bool = False
 
 
-@adapter.tool
+@server.tool
 async def order_pizza(ctx: RunContext[MCPDeps], address: str) -> str:
     """Order a pizza, asking the user which one."""
     choice = await ctx.deps.mcp.elicit("Which pizza would you like?", Pizza)
@@ -29,7 +29,7 @@ async def order_pizza(ctx: RunContext[MCPDeps], address: str) -> str:
 
 
 app = FastAPI()
-app.include_router(MCPRouter(adapter))
+app.include_router(MCPRouter(server))
 
 
 if __name__ == "__main__":

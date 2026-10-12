@@ -82,7 +82,7 @@ from .inputs import InputRequired, RequestStateSealer, build_request_state_codec
 from .sources import served_prompts, served_resources
 
 __all__ = [
-    "MCPAdapter",
+    "MCPServer",
     "ToolManagerScope",
 ]
 
@@ -107,7 +107,7 @@ class PreparedRun(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't h
     instructions: InstructionsResolver[AgentDepsT]
 
 
-class MCPAdapter(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't have defaults before 3.13
+class MCPServer(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't have defaults before 3.13
     def __init__(
         self,
         *,
@@ -181,7 +181,7 @@ class MCPAdapter(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't ha
         # Layered on the agent's capabilities per run, so they also serve an agent built elsewhere.
         self._mcp_resources = MCPResources[AgentDepsT]()
         self._mcp_prompts = MCPPrompts[AgentDepsT]()
-        # Last, so the adapter's own handlers win over the agent's capabilities'.
+        # Last, so the server's own handlers win over the agent's capabilities'.
         self._mcp_handlers = MCPHandlers[AgentDepsT]()
         self._mcp_capabilities: list[AbstractCapability[AgentDepsT]] = [
             self._mcp_resources,
@@ -371,7 +371,7 @@ class MCPAdapter(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't ha
 
     @property
     def _has_deps(self) -> bool:
-        # `Agent`'s default, and the adapter's for no deps.
+        # `Agent`'s default, and the server's for no deps.
         return self.agent.deps_type is not object and self.agent.deps_type is not type(None)
 
     async def _build_deps(self) -> AgentDepsT:
@@ -415,7 +415,7 @@ class MCPAdapter(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't ha
 
     @asynccontextmanager
     async def _prepare_run(self, run_context: RunContext[AgentDepsT]) -> AsyncGenerator[PreparedRun[AgentDepsT]]:
-        # The agent's own run setup, as in `Agent.iter`, with the adapter's capabilities as the run layer.
+        # The agent's own run setup, as in `Agent.iter`, with the server's capabilities as the run layer.
         base_capability, base_is_override = self.agent._base_run_capability()  # noqa: SLF001
         resolved = await self.agent._resolve_run_capabilities(  # noqa: SLF001
             run_context,
@@ -496,7 +496,7 @@ class MCPAdapter(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't ha
                 async with self._prepare_run(run_context) as run:
                     yield run
             case ToolManagerScope.APP, None:
-                raise UserError("The adapter must be entered first, e.g. by including its MCPRouter in the app")
+                raise UserError("The server must be entered first, e.g. by including its MCPRouter in the app")
             case ToolManagerScope.APP, shared:
                 yield self._share_run(shared, run_context)
 
@@ -512,7 +512,7 @@ class MCPAdapter(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't ha
     ) -> AsyncGenerator[MCPContext]:
         async with get_concurrency_context(self._concurrency_limiter, f"mcp:{self.name}"), self._request_run() as run:
             ctx = MCPContext(
-                adapter=self,
+                server=self,
                 run_context=run.run_context,
                 capability=run.capability,
                 tool_manager=run.tool_manager,
@@ -654,7 +654,7 @@ class MCPAdapter(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't ha
             return input_required_result(e, request, ctx.inputs, sealer=self._request_state_sealer)
 
     def capabilities(self, ctx: MCPContext) -> ServerCapabilities:
-        # Worked out per request, as the decorators can add to the adapter after it is built.
+        # Worked out per request, as the decorators can add to the server after it is built.
         resources = served_resources(ctx.capability)
         prompts = served_prompts(ctx.capability)
         completable = any(resource.complete for resource in resources) or any(

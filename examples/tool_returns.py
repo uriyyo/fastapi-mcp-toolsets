@@ -5,9 +5,9 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from pydantic_ai import BinaryContent, ImageUrl, ToolReturn
 
-from fastapi_mcp_toolsets import MCPAdapter, MCPRouter
+from fastapi_mcp_toolsets import MCPRouter, MCPServer
 
-adapter = MCPAdapter(name="screen")
+server = MCPServer(name="screen")
 
 # 8x8 PNGs: grey before the click, green after.
 BEFORE_PNG = base64.b64decode(
@@ -24,13 +24,13 @@ class Point(BaseModel):
 
 
 # Becomes `structuredContent`, with an `outputSchema` on the tool.
-@adapter.tool_plain
+@server.tool_plain
 def locate(element: str) -> Point:
     """Find where an element is on the screen."""
     return Point(x=len(element) * 10, y=42)
 
 
-@adapter.tool_plain
+@server.tool_plain
 def click_and_capture(x: int, y: int) -> ToolReturn:
     """Click at coordinates and show before/after screenshots."""
     before_screenshot = BinaryContent(data=BEFORE_PNG, media_type="image/png")
@@ -44,14 +44,14 @@ def click_and_capture(x: int, y: int) -> ToolReturn:
 
 
 # A URL is a resource link, or text before 2025-06-18.
-@adapter.tool_plain
+@server.tool_plain
 def reference_image() -> ImageUrl:
     """Link to the image to compare screenshots against."""
     return ImageUrl("https://upload.wikimedia.org/wikipedia/commons/7/7b/Parabola.png")
 
 
 app = FastAPI()
-app.include_router(MCPRouter(adapter))
+app.include_router(MCPRouter(server))
 
 
 if __name__ == "__main__":

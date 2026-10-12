@@ -3,12 +3,12 @@ import anyio
 from fastapi import FastAPI
 from pydantic_ai import RunContext
 
-from fastapi_mcp_toolsets import MCPAdapter, MCPDeps, MCPRouter
+from fastapi_mcp_toolsets import MCPDeps, MCPRouter, MCPServer
 
-adapter = MCPAdapter(deps_type=MCPDeps, name="downloads")
+server = MCPServer(deps_type=MCPDeps, name="downloads")
 
 
-@adapter.tool
+@server.tool
 async def download(ctx: RunContext[MCPDeps], files: list[str]) -> str:
     """Download the given files."""
     await ctx.deps.mcp.log("info", f"downloading {len(files)} files", logger="download")
@@ -22,7 +22,7 @@ async def download(ctx: RunContext[MCPDeps], files: list[str]) -> str:
 
 
 app = FastAPI()
-app.include_router(MCPRouter(adapter))
+app.include_router(MCPRouter(server))
 
 
 if __name__ == "__main__":

@@ -13,11 +13,11 @@ from .protocol import MCPProtocolVersion, ProtocolFeatures
 from .server import (
     Elicitation,
     InputUnavailableError,
-    MCPAdapter,
     MCPContext,
     MCPDeps,
     MCPHandler,
     MCPHandlers,
+    MCPServer,
     ToolManagerScope,
 )
 from .transport import MCPExtension, MCPRoute, MCPRouter
@@ -29,7 +29,6 @@ __all__ = [
     "Icon",
     "Implementation",
     "InputUnavailableError",
-    "MCPAdapter",
     "MCPContext",
     "MCPDeps",
     "MCPExtension",
@@ -40,6 +39,7 @@ __all__ = [
     "MCPResources",
     "MCPRoute",
     "MCPRouter",
+    "MCPServer",
     "ProtocolFeatures",
     "ResourceSecurity",
     "ToolAnnotation",

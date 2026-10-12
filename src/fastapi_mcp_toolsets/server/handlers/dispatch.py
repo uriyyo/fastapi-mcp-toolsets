@@ -78,5 +78,5 @@ def page[T](
     return paginate(
         items,
         cursor=page_cursor(request),
-        page_size=ctx.adapter.page_size,
+        page_size=ctx.server.page_size,
     )
