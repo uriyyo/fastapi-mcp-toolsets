@@ -8,7 +8,7 @@ from mcp.shared.inbound import validate_mcp_param_headers
 from mcp_types import INVALID_PARAMS, CallToolRequest, ElicitResult, ListToolsRequest, ListToolsResult, Result
 from pydantic_ai import ApprovalRequired, ToolCallPart, ToolDefinition, ToolDenied
 
-from fastapi_mcp_toolsets.features import mcp_tool, tool_error, tool_failure, tool_success
+from fastapi_mcp_toolsets.features import check_header_params, mcp_tool, tool_error, tool_failure, tool_success
 from fastapi_mcp_toolsets.server.context import MCPContext
 from fastapi_mcp_toolsets.server.inputs import (
     APPROVAL_INPUT_KEY,
@@ -29,6 +29,9 @@ __all__ = [
 @DEFAULT_HANDLERS.handler
 async def list_tools(request: ListToolsRequest, ctx: MCPContext) -> ListToolsResult:
     tool_defs, next_cursor = page(ctx.tool_manager.tool_defs, request, ctx)
+
+    for tool_def in tool_defs:
+        check_header_params(tool_def)
 
     return ListToolsResult(
         tools=[mcp_tool(tool_def, protocol_version=ctx.protocol_version) for tool_def in tool_defs],

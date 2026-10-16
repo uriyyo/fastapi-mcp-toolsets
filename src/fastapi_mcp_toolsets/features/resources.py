@@ -25,6 +25,7 @@ from pydantic_core import to_json
 
 from fastapi_mcp_toolsets._typing import AgentDepsT
 
+from .apps import APP_MIME_TYPE, UI_SCHEME
 from .completions import Completer
 from .functions import FunctionSchema, build_function_schema, call_function
 
@@ -162,7 +163,7 @@ class MCPResources(AbstractCapability[AgentDepsT]):
                     name=schema.name,
                     title=title,
                     description=description or schema.description,
-                    mime_type=mime_type,
+                    mime_type=APP_MIME_TYPE if mime_type is None and uri.startswith(UI_SCHEME) else mime_type,
                     size=size,
                     icons=icons,
                     annotations=annotations,

@@ -15,3 +15,16 @@ def test_tool_metadata_holds_one_config_per_kind() -> None:
     assert TaskSupport.of(tool_def) == TaskSupport(mode=TaskMode.REQUIRED)
     assert ToolAnnotation.of(ToolDefinition(name="bare")) is None
     assert ToolAnnotation().as_metadata() == {METADATA_KEY: {ToolAnnotation: ToolAnnotation()}}
+
+
+def test_invalid_header_param_is_a_user_error() -> None:
+    import pytest
+    from pydantic_ai import UserError
+
+    from fastapi_mcp_toolsets.features import check_header_params
+
+    # A header token with a space is not an RFC 9110 token.
+    schema = {"type": "object", "properties": {"t": {"type": "string", "x-mcp-header": "Bad Name"}}}
+
+    with pytest.raises(UserError, match="invalid header parameter"):
+        check_header_params(ToolDefinition(name="t", parameters_json_schema=schema))

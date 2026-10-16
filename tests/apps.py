@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from pydantic_ai import RunContext
 
 from fastapi_mcp_toolsets import (
+    AppUI,
     InProcessTaskBackend,
     MCPDeps,
     MCPRouter,
@@ -20,6 +21,7 @@ from fastapi_mcp_toolsets import (
     TaskMode,
     TaskSupport,
     ToolAnnotation,
+    mcp_header,
     tool_metadata,
 )
 
@@ -77,7 +79,38 @@ def build_server(**kwargs: object) -> MCPServer[Deps]:
         recipient = await ctx.deps.mcp.elicit("Email?", Recipient)
         return recipient.data.email if recipient.accepted and recipient.data else "nobody"
 
+    @server.tool_plain
+    def tenant_name(tenant: Annotated[str, mcp_header("Tenant")], suffix: str = "") -> str:
+        """The tenant, routed on by a header."""
+        return tenant + suffix
+
     return server
+
+
+def ui_server() -> MCPServer[Deps]:
+    server = MCPServer(
+        deps_type=Deps,
+        name="ui",
+        experimental={"x-feature": {}},
+        extensions={"com.example/ext": {"level": 1}},
+    )
+
+    @server.tool_plain(metadata=tool_metadata(AppUI(resource_uri="ui://clock/app.html", visibility=["app"])))
+    def get_time() -> str:
+        """The time."""
+        return "noon"
+
+    @server.resource("ui://clock/app.html")
+    def clock_page() -> str:
+        return "<html>clock</html>"
+
+    return server
+
+
+def ui_app() -> FastAPI:
+    app = FastAPI()
+    app.include_router(MCPRouter(ui_server()))
+    return app
 
 
 def build_app(**kwargs: object) -> FastAPI:

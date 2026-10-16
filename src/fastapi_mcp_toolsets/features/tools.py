@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
+from mcp.shared.inbound import X_MCP_HEADER_KEY, find_invalid_x_mcp_header
 from mcp_types import (
     AudioContent,
     BlobResourceContents,
@@ -17,18 +18,21 @@ from mcp_types import (
     Tool,
     ToolAnnotations,
 )
-from pydantic import ValidationError
-from pydantic_ai import BinaryContent, CallDeferred, ModelRetry, ToolDefinition, ToolFailed, ToolReturn
+from pydantic import Field, ValidationError
+from pydantic_ai import BinaryContent, CallDeferred, ModelRetry, ToolDefinition, ToolFailed, ToolReturn, UserError
 from pydantic_ai.messages import FileUrl
 from pydantic_core import to_json, to_jsonable_python
 
 from fastapi_mcp_toolsets.protocol import MCPProtocolVersion
 
+from .apps import AppUI
 from .config import ToolConfig
 
 __all__ = [
     "WRAPPED_RESULT_KEY",
     "ToolAnnotation",
+    "check_header_params",
+    "mcp_header",
     "mcp_tool",
     "tool_error",
     "tool_failure",
@@ -135,7 +139,22 @@ def mcp_tool(
             tool.meta = None if annotation.meta is None else {**annotation.meta}
             tool.annotations = annotation.to_mcp()
 
+    match AppUI.of(tool_def):
+        case AppUI() as app:
+            tool.meta = {**(tool.meta or {}), "ui": app.to_meta()}
+
     return tool
+
+
+def mcp_header(name: str) -> Any:
+    """Marks a tool argument as mirrored into the `Mcp-Param-<name>` header: `Annotated[str, mcp_header("Tenant")]`."""
+    return Field(json_schema_extra={X_MCP_HEADER_KEY: name})
+
+
+def check_header_params(tool_def: ToolDefinition) -> None:
+    # A bad annotation would make clients drop the tool silently; better the developer hears about it.
+    if (reason := find_invalid_x_mcp_header(tool_def.parameters_json_schema)) is not None:
+        raise UserError(f"Tool {tool_def.name!r} has an invalid header parameter: {reason}")
 
 
 def structured_content(data: Any, tool_def: ToolDefinition, *, protocol_version: MCPProtocolVersion) -> Any:

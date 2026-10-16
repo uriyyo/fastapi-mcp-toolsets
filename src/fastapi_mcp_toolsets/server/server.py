@@ -74,7 +74,7 @@ from typing_extensions import TypeForm
 
 from fastapi_mcp_toolsets._compat import GraphAgentState, resolve_sourced_instructions
 from fastapi_mcp_toolsets._typing import AgentDepsT
-from fastapi_mcp_toolsets.features import Completer, MCPPrompts, MCPResources
+from fastapi_mcp_toolsets.features import APPS_EXTENSION, UI_SCHEME, AppUI, Completer, MCPPrompts, MCPResources
 from fastapi_mcp_toolsets.protocol import MCPProtocolVersion, MCPResponse, as_request_id, jsonrpc_error, jsonrpc_result
 from fastapi_mcp_toolsets.tasks import TASKS_EXTENSION, TaskBackend
 
@@ -129,6 +129,8 @@ class MCPServer(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't hav
         request_state_codec: RequestStateCodec | None = None,
         request_state_max_age: timedelta = DEFAULT_REQUEST_STATE_MAX_AGE,
         tasks: TaskBackend | None = None,
+        experimental: Mapping[str, Mapping[str, Any]] | None = None,
+        extensions: Mapping[str, Mapping[str, Any]] | None = None,
         name: str | None = None,
         version: str = DEFAULT_SERVER_VERSION,
         title: str | None = None,
@@ -163,6 +165,9 @@ class MCPServer(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't hav
 
         self.agent = agent
         self.tasks = tasks
+        # Advertised as given, next to the extensions the server provides itself.
+        self.experimental = None if experimental is None else {key: dict(value) for key, value in experimental.items()}
+        self.extensions = {key: dict(value) for key, value in (extensions or {}).items()}
         self.app: FastAPI | None = None
         self.tool_manager_scope = tool_manager_scope
         self.page_size = page_size
@@ -686,6 +691,16 @@ class MCPServer(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't hav
             prompt.complete for prompt in prompts.values()
         )
 
+        extensions = dict(self.extensions)
+
+        if self.tasks is not None:
+            extensions[TASKS_EXTENSION] = {}
+
+        if any(resource.uri.startswith(UI_SCHEME) for resource in resources) or any(
+            AppUI.of(tool_def) is not None for tool_def in ctx.tool_manager.tool_defs
+        ):
+            extensions[APPS_EXTENSION] = {}
+
         # No `listChanged` or `subscribe`: there is no stream to send them on.
         return ServerCapabilities(
             tools=ToolsCapability(),
@@ -693,5 +708,6 @@ class MCPServer(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't hav
             resources=ResourcesCapability() if resources else None,
             prompts=PromptsCapability() if prompts else None,
             completions=CompletionsCapability() if completable else None,
-            extensions={TASKS_EXTENSION: {}} if self.tasks is not None else None,
+            experimental=self.experimental,
+            extensions=extensions or None,
         )

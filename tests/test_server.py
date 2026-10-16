@@ -26,7 +26,7 @@ async def test_handshake_list_and_call(connect) -> None:
         listed = await client.call("tools/list")
         tools = {tool["name"]: tool for tool in listed["result"]["tools"]}
 
-        assert set(tools) == {"add", "whoami", "progress", "ask", "slow", "slow_ask"}
+        assert set(tools) == {"add", "whoami", "progress", "ask", "slow", "slow_ask", "tenant_name"}
         assert tools["add"]["annotations"] == {"title": "Add", "readOnlyHint": True}
         assert tools["add"]["inputSchema"]["required"] == ["a", "b"]
 
@@ -144,3 +144,47 @@ async def test_tasks_capability_only_with_backend(connect) -> None:
         discovered = await client.call("server/discover", {"_meta": modern_meta()})
 
         assert discovered["result"]["capabilities"]["extensions"] == {TASKS_EXTENSION: {}}
+
+
+async def test_subscriptions_are_refused_outright(connect) -> None:
+    async with connect(build_app()) as client:
+        await client.initialize()
+
+        refused = await client.call("resources/subscribe", {"uri": "file:///x"})
+
+        assert refused["error"]["code"] == mcp_types.METHOD_NOT_FOUND
+        assert "stateless" in refused["error"]["message"]
+
+
+async def test_header_params_are_declared_and_checked(connect) -> None:
+    async with connect(build_app()) as client:
+        listed = await client.call("tools/list", {"_meta": modern_meta()})
+        tool = next(tool for tool in listed["result"]["tools"] if tool["name"] == "tenant_name")
+        params = {"name": "tenant_name", "arguments": {"tenant": "acme"}, "_meta": modern_meta()}
+
+        unrouted = await client.call("tools/call", params)
+        routed = await client.call("tools/call", params, **{"mcp-param-tenant": "acme"})
+
+        assert tool["inputSchema"]["properties"]["tenant"]["x-mcp-header"] == "Tenant"
+        assert unrouted["error"]["code"] == mcp_types.HEADER_MISMATCH
+        assert routed["result"]["content"][0]["text"] == "acme"
+
+
+async def test_apps_and_capability_settings(connect) -> None:
+    from .apps import ui_app
+
+    async with connect(ui_app()) as client:
+        discovered = await client.call("server/discover", {"_meta": modern_meta()})
+        listed = await client.call("tools/list", {"_meta": modern_meta()})
+        resources = await client.call("resources/list", {"_meta": modern_meta()})
+        page = await client.call("resources/read", {"uri": "ui://clock/app.html", "_meta": modern_meta()})
+
+        capabilities = discovered["result"]["capabilities"]
+
+        assert capabilities["experimental"] == {"x-feature": {}}
+        assert capabilities["extensions"] == {"com.example/ext": {"level": 1}, "io.modelcontextprotocol/ui": {}}
+        assert listed["result"]["tools"][0]["_meta"] == {
+            "ui": {"resourceUri": "ui://clock/app.html", "visibility": ["app"]}
+        }
+        assert resources["result"]["resources"][0]["mimeType"] == "text/html;profile=mcp-app"
+        assert page["result"]["contents"][0]["text"] == "<html>clock</html>"
