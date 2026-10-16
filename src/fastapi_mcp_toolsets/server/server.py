@@ -80,7 +80,14 @@ from fastapi_mcp_toolsets.tasks import TASKS_EXTENSION, TaskBackend
 
 from .context import InstructionsResolver, MCPContext, MCPDeps, MCPMessageStream
 from .handlers import MCPHandler, MCPHandlers, handle, parse_extension_request, run_task
-from .inputs import InputRequired, RequestStateSealer, build_request_state_codec, input_required_result, read_inputs
+from .inputs import (
+    InputRequired,
+    RequestStateSealer,
+    build_request_state_codec,
+    carries_request_state,
+    input_required_result,
+    read_inputs,
+)
 from .sources import served_prompts, served_resources
 
 __all__ = [
@@ -675,7 +682,9 @@ class MCPServer(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't hav
         return (meta or {}).get(LOG_LEVEL_META_KEY)
 
     async def _handle_request(self, request: Request[Any, Any], ctx: MCPContext) -> Result:
-        if ctx.protocol_version.features.input_required:
+        # A retry brings its answers; a request nested in another, e.g. a tool the model used while sampling,
+        # keeps the session it runs in.
+        if ctx.protocol_version.features.input_required and carries_request_state(request):
             ctx.inputs = read_inputs(request, sealer=self._request_state_sealer)
 
         try:

@@ -9,6 +9,7 @@ import anyio
 import anyio.lowlevel
 from fastapi import FastAPI, Header
 from fastapi_injected import DepFactory
+from mcp_types import TextContent
 from pydantic import BaseModel
 from pydantic_ai import RunContext
 
@@ -69,6 +70,7 @@ def build_server(**kwargs: object) -> MCPServer[Deps]:
 
     add_task_tools(server)
     add_header_tools(server)
+    add_sampling_tools(server)
 
     return server
 
@@ -98,6 +100,14 @@ def add_task_tools(server: MCPServer[Deps]) -> None:
         """Asks on the way, only as a task."""
         recipient = await ctx.deps.mcp.elicit("Email?", Recipient)
         return recipient.data.email if recipient.accepted and recipient.data else "nobody"
+
+
+def add_sampling_tools(server: MCPServer[Deps]) -> None:
+    @server.tool
+    async def solve(ctx: RunContext[Deps], question: str) -> str:
+        """Asks the client's model, letting it use the add tool."""
+        answer = await ctx.deps.mcp.sample_with_tools(question, max_tokens=50, tool_names=["add"])
+        return answer.content.text if isinstance(answer.content, TextContent) else "?"
 
 
 def add_header_tools(server: MCPServer[Deps]) -> None:

@@ -36,6 +36,7 @@ async def test_handshake_list_and_call(connect) -> None:
             "tenant_name",
             "status_report",
             "sign_in",
+            "solve",
         }
         assert tools["add"]["annotations"] == {"title": "Add", "readOnlyHint": True}
         assert tools["add"]["inputSchema"]["required"] == ["a", "b"]
@@ -223,3 +224,57 @@ async def test_url_elicitation_is_a_retry(connect) -> None:
 
         assert declined["result"]["content"][0]["text"] == "decline"
         assert unsupported["result"]["isError"] is True
+
+
+async def test_sampling_with_tools_loops_through_retries(connect) -> None:
+    async with connect(build_app()) as client:
+        meta = modern_meta({"sampling": {"tools": {}}})
+        params = {"name": "solve", "arguments": {"question": "2+2?"}, "_meta": meta}
+
+        asked = await client.call("tools/call", params)
+        (key, request), *_ = asked["result"]["inputRequests"].items()
+
+        assert request["method"] == "sampling/createMessage"
+        assert [tool["name"] for tool in request["params"]["tools"]] == ["add"]
+        assert request["params"]["messages"] == [{"role": "user", "content": {"type": "text", "text": "2+2?"}}]
+
+        # The model uses the tool; the server runs it and asks again with the result.
+        use = {"type": "tool_use", "id": "u1", "name": "add", "input": {"a": 2, "b": 2}}
+        asked_again = await client.call(
+            "tools/call",
+            {
+                **params,
+                "requestState": asked["result"]["requestState"],
+                "inputResponses": {key: {"role": "assistant", "content": use, "model": "m", "stopReason": "toolUse"}},
+            },
+        )
+        (key2, request2), *_ = asked_again["result"]["inputRequests"].items()
+        tool_result = request2["params"]["messages"][-1]
+
+        assert key2 != key
+        assert request2["params"]["messages"][1]["content"] == use
+        assert tool_result["role"] == "user"
+        assert tool_result["content"][0]["type"] == "tool_result"
+        assert tool_result["content"][0]["toolUseId"] == "u1"
+        assert tool_result["content"][0]["content"] == [{"type": "text", "text": "4"}]
+
+        answered = await client.call(
+            "tools/call",
+            {
+                **params,
+                "requestState": asked_again["result"]["requestState"],
+                "inputResponses": {key2: {"role": "assistant", "content": {"type": "text", "text": "4"}, "model": "m"}},
+            },
+        )
+
+        assert answered["result"]["content"][0]["text"] == "4"
+
+
+async def test_sampling_with_tools_needs_the_capability(connect) -> None:
+    async with connect(build_app()) as client:
+        params = {"name": "solve", "arguments": {"question": "2+2?"}, "_meta": modern_meta({"sampling": {}})}
+
+        refused = await client.call("tools/call", params)
+
+        assert refused["result"]["isError"] is True
+        assert "sampling with tools" in refused["result"]["content"][0]["text"]

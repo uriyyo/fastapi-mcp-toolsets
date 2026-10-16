@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Final, cast, get_args
+from typing import TYPE_CHECKING, Any, Final, Literal, cast, get_args
 
 from anyio.abc import ObjectSendStream
 from mcp.shared.exceptions import MCPError
 from mcp_types import (
+    INTERNAL_ERROR,
     INVALID_PARAMS,
+    AudioContent,
     CallToolRequest,
     CallToolRequestParams,
     CallToolResult,
@@ -15,6 +17,7 @@ from mcp_types import (
     CreateMessageRequest,
     CreateMessageRequestParams,
     CreateMessageResult,
+    CreateMessageResultWithTools,
     ElicitRequest,
     ElicitRequestFormParams,
     ElicitRequestURLParams,
@@ -22,6 +25,7 @@ from mcp_types import (
     GetPromptRequest,
     GetPromptRequestParams,
     GetPromptResult,
+    ImageContent,
     Implementation,
     InputRequiredResult,
     JSONRPCError,
@@ -45,13 +49,18 @@ from mcp_types import (
     SamplingMessage,
     ServerNotification,
     TextContent,
+    Tool,
+    ToolChoice,
+    ToolResultContent,
+    ToolUseContent,
 )
 from pydantic import TypeAdapter, ValidationError
-from pydantic_ai import InstructionPart, RunContext
+from pydantic_ai import InstructionPart, RunContext, UserError
 from pydantic_ai.capabilities.abstract import AbstractCapability
 from pydantic_ai.tool_manager import ToolManager
 
 from fastapi_mcp_toolsets._compat import ElicitationJsonSchema, validate_elicitation_schema
+from fastapi_mcp_toolsets.features import mcp_tool
 from fastapi_mcp_toolsets.protocol import MCPProtocolVersion, jsonrpc_notification
 from fastapi_mcp_toolsets.tasks.backend import TaskBackend
 
@@ -72,6 +81,15 @@ __all__ = [
     "MCPDeps",
     "MCPMessageStream",
 ]
+
+type ToolChoiceMode = Literal["auto", "required", "none"]
+type IncludeContext = Literal["none", "thisServer", "allServers"]
+type SamplingBlock = TextContent | ImageContent | AudioContent | ToolUseContent | ToolResultContent
+
+
+def as_blocks(content: SamplingBlock | Sequence[SamplingBlock]) -> list[SamplingBlock]:
+    return [*content] if isinstance(content, Sequence) else [content]
+
 
 type MCPMessageStream = ObjectSendStream[JSONRPCResponse | JSONRPCError | JSONRPCNotification]
 type InstructionsResolver[DepsT] = Callable[[RunContext[DepsT]], Awaitable[list[InstructionPart]]]
@@ -202,12 +220,18 @@ class MCPContext:
         system_prompt: str | None = None,
         temperature: float | None = None,
         model_preferences: ModelPreferences | None = None,
+        tools: Sequence[Tool] | None = None,
+        tool_choice: ToolChoiceMode | None = None,
+        include_context: IncludeContext | None = None,
+        stop_sequences: Sequence[str] | None = None,
         key: str | None = None,
-    ) -> CreateMessageResult:
-        self.require_input(
-            "sampling",
-            supported=self.client_capabilities.sampling is not None,
-        )
+    ) -> CreateMessageResult | CreateMessageResultWithTools:
+        """Ask the client's model for a completion; with `tools`, it may answer with a `ToolUseContent` to run."""
+        sampling = self.client_capabilities.sampling
+        self.require_input("sampling", supported=sampling is not None)
+
+        if tools is not None:
+            self.require_input("sampling with tools", supported=sampling is not None and sampling.tools is not None)
 
         if isinstance(messages, str):
             messages = [SamplingMessage(role="user", content=TextContent(text=messages))]
@@ -219,14 +243,83 @@ class MCPContext:
                 system_prompt=system_prompt,
                 temperature=temperature,
                 model_preferences=model_preferences,
+                tools=None if tools is None else [*tools],
+                tool_choice=None if tool_choice is None else ToolChoice(mode=tool_choice),
+                include_context=include_context,
+                stop_sequences=None if stop_sequences is None else [*stop_sequences],
             ),
         )
 
         match self.inputs.take(request, kind="sample", key=key):
-            case CreateMessageResult() as result:
+            case CreateMessageResult() | CreateMessageResultWithTools() as result:
                 return result
             case response:
                 raise MCPError(INVALID_PARAMS, f"Expected a sampling result, got {type(response).__name__}")
+
+    async def sample_with_tools(
+        self,
+        messages: str | Sequence[SamplingMessage],
+        *,
+        max_tokens: int,
+        tool_names: Sequence[str] | None = None,
+        max_rounds: int = 10,
+        key: str | None = None,
+        **options: Any,
+    ) -> CreateMessageResultWithTools:
+        """Sample with this server's tools on offer, running each tool the model uses, until it answers in text.
+
+        `tool_names` picks tools from the ones this request serves, all of them by default. Each round is one
+        retry of the request, replayed from the start, so what runs before the loop must be repeatable.
+        """
+        offered = {tool_def.name: tool_def for tool_def in self.tool_manager.tool_defs}
+
+        if tool_names is not None and (unknown := set(tool_names) - offered.keys()):
+            raise UserError(f"Unknown tools to sample with: {sorted(unknown)}")
+
+        tools = [
+            mcp_tool(tool_def, protocol_version=self.protocol_version)
+            for name, tool_def in offered.items()
+            if tool_names is None or name in tool_names
+        ]
+        if isinstance(messages, str):
+            messages = [SamplingMessage(role="user", content=TextContent(text=messages))]
+
+        history = [*messages]
+
+        for round_number in range(max_rounds):
+            round_key = None if key is None else f"{key}-{round_number}"
+            result = await self.sample(history, max_tokens=max_tokens, tools=tools, key=round_key, **options)
+
+            if not isinstance(result, CreateMessageResultWithTools):
+                return CreateMessageResultWithTools(
+                    role=result.role, content=result.content, model=result.model, stop_reason=result.stop_reason
+                )
+
+            uses = [block for block in as_blocks(result.content) if isinstance(block, ToolUseContent)]
+
+            if not uses:
+                return result
+
+            results = [await self.use_tool(use) for use in uses]
+            history += [
+                SamplingMessage(role="assistant", content=result.content),
+                SamplingMessage(role="user", content=results),
+            ]
+
+        raise MCPError(INTERNAL_ERROR, f"The model kept calling tools for {max_rounds} rounds")
+
+    async def use_tool(self, use: ToolUseContent) -> ToolResultContent:
+        # Through the handler, so hooks, approvals and header checks apply as for a client's call.
+        match await self.call_tool(use.name, use.input):
+            case CallToolResult(content=content, structured_content=structured, is_error=is_error):
+                return ToolResultContent(
+                    tool_use_id=use.id,
+                    content=content,
+                    structured_content=structured,
+                    is_error=is_error or None,
+                )
+            case other:
+                raise MCPError(INTERNAL_ERROR, f"Tool {use.name!r} answered with {type(other).__name__} while sampling")
 
     async def list_roots(self, *, key: str | None = None) -> list[Root]:
         self.require_input(

@@ -41,6 +41,7 @@ __all__ = [
     "RequestStateSealer",
     "approval_input",
     "build_request_state_codec",
+    "carries_request_state",
     "input_required_result",
     "read_inputs",
     "supports_form_elicitation",
@@ -186,6 +187,14 @@ def approval_input(tool_name: str, arguments: Mapping[str, Any]) -> ElicitReques
             requested_schema={"type": "object", "properties": {}},
         ),
     )
+
+
+def carries_request_state(request: Request[Any, Any]) -> bool:
+    match request.params:
+        case InputResponseRequestParams(request_state=str()):
+            return True
+        case _:
+            return False
 
 
 def read_inputs(request: Request[Any, Any], *, sealer: RequestStateSealer) -> InputSession:
