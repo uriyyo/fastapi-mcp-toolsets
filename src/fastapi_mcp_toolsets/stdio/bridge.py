@@ -38,6 +38,7 @@ from pydantic import ValidationError
 from starlette.types import ASGIApp
 
 from fastapi_mcp_toolsets.protocol import MCPProtocolVersion, jsonrpc_error
+from fastapi_mcp_toolsets.tasks.wire import TASK_NAME_PARAMS
 from fastapi_mcp_toolsets.transport.router import parse_protocol_version
 
 from .asgi import ASGIStreamTransport, lifespan
@@ -113,7 +114,7 @@ class HTTPSession:
     def name_headers(self, method: str, params: Mapping[str, Any]) -> dict[str, str]:
         headers: dict[str, str] = {}
 
-        match NAME_BEARING_METHODS.get(method):
+        match {**NAME_BEARING_METHODS, **TASK_NAME_PARAMS}.get(method):
             case str() as key if isinstance(name := params.get(key), str):
                 headers[MCP_NAME_HEADER] = encode_header_value(name)
 

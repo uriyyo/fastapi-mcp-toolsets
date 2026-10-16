@@ -6,6 +6,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import timedelta
 from enum import StrEnum
+from functools import partial
 from types import TracebackType
 from typing import Annotated, Any, Generic, Self, cast, overload
 
@@ -75,9 +76,10 @@ from fastapi_mcp_toolsets._compat import GraphAgentState, resolve_sourced_instru
 from fastapi_mcp_toolsets._typing import AgentDepsT
 from fastapi_mcp_toolsets.features import Completer, MCPPrompts, MCPResources
 from fastapi_mcp_toolsets.protocol import MCPProtocolVersion, MCPResponse, as_request_id, jsonrpc_error, jsonrpc_result
+from fastapi_mcp_toolsets.tasks import TASKS_EXTENSION, TaskBackend
 
 from .context import InstructionsResolver, MCPContext, MCPDeps, MCPMessageStream
-from .handlers import MCPHandler, MCPHandlers, handle
+from .handlers import MCPHandler, MCPHandlers, handle, parse_extension_request, run_task
 from .inputs import InputRequired, RequestStateSealer, build_request_state_codec, input_required_result, read_inputs
 from .sources import served_prompts, served_resources
 
@@ -126,6 +128,7 @@ class MCPServer(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't hav
         request_state_keys: Sequence[str | bytes] | None = None,
         request_state_codec: RequestStateCodec | None = None,
         request_state_max_age: timedelta = DEFAULT_REQUEST_STATE_MAX_AGE,
+        tasks: TaskBackend | None = None,
         name: str | None = None,
         version: str = DEFAULT_SERVER_VERSION,
         title: str | None = None,
@@ -159,6 +162,8 @@ class MCPServer(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't hav
             raise UserError("Register tools, toolsets, capabilities and instructions on the agent, not alongside it")
 
         self.agent = agent
+        self.tasks = tasks
+        self.app: FastAPI | None = None
         self.tool_manager_scope = tool_manager_scope
         self.page_size = page_size
         self.server_info = Implementation(
@@ -337,6 +342,8 @@ class MCPServer(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't hav
 
     @asynccontextmanager
     async def lifespan(self, app: FastAPI | None = None) -> AsyncGenerator[Self]:
+        self.app = app
+
         async with push_inject_scope(app=app), self:
             yield self
 
@@ -346,6 +353,10 @@ class MCPServer(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't hav
             # The agent's model is never called, so it is not entered (nor inferred) along with the toolsets.
             with self.agent.override(model=TestModel()):
                 await stack.enter_async_context(self.agent)
+
+            if self.tasks is not None:
+                # After the agent, so running tasks are stopped before the toolsets they use close.
+                await stack.enter_async_context(self.tasks.lifespan(partial(run_task, self)))
 
             if self.tool_manager_scope is ToolManagerScope.APP:
                 # Deps from the scope `lifespan` binds to the app, released when that scope exits.
@@ -605,8 +616,7 @@ class MCPServer(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't hav
             ctx.protocol_version = MCPProtocolVersion.negotiate_handshake((message.params or {}).get("protocolVersion"))
 
         try:
-            # A method the version lacks is a `KeyError`.
-            request = parse_client_request(message.method, ctx.protocol_version.version, message.params)
+            request = self._parse_request(message, ctx)
         except KeyError:
             return jsonrpc_error(
                 METHOD_NOT_FOUND,
@@ -633,6 +643,21 @@ class MCPServer(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't hav
             request_id=message.id,
             server_info=self.server_info,
         )
+
+    def _parse_request(self, message: JSONRPCRequest, ctx: MCPContext) -> Request[Any, Any]:
+        # A method the version lacks is a `KeyError`.
+        try:
+            return parse_client_request(message.method, ctx.protocol_version.version, message.params)
+        except KeyError:
+            # Extensions are negotiated per request, which only the modern versions do.
+            if ctx.protocol_version.features.handshake:
+                raise
+
+        match parse_extension_request(message.method, message.params, ctx):
+            case None:
+                raise KeyError(message.method)
+            case request:
+                return request
 
     def _request_log_level(self, request: Request[Any, Any], ctx: MCPContext) -> LoggingLevel | None:
         if not ctx.protocol_version.features.log_level_in_meta:
@@ -668,4 +693,5 @@ class MCPServer(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't hav
             resources=ResourcesCapability() if resources else None,
             prompts=PromptsCapability() if prompts else None,
             completions=CompletionsCapability() if completable else None,
+            extensions={TASKS_EXTENSION: {}} if self.tasks is not None else None,
         )

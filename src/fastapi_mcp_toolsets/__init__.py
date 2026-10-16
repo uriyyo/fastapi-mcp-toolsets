@@ -7,7 +7,9 @@ from .features import (
     MCPResources,
     ResourceSecurity,
     ToolAnnotation,
+    ToolConfig,
     UserMessage,
+    tool_metadata,
 )
 from .protocol import MCPProtocolVersion, ProtocolFeatures
 from .server import (
@@ -20,6 +22,7 @@ from .server import (
     MCPServer,
     ToolManagerScope,
 )
+from .tasks import InProcessTaskBackend, TaskBackend, TaskMode, TaskSupport
 from .transport import MCPExtension, MCPRoute, MCPRouter
 
 __all__ = [
@@ -28,6 +31,7 @@ __all__ = [
     "Elicitation",
     "Icon",
     "Implementation",
+    "InProcessTaskBackend",
     "InputUnavailableError",
     "MCPContext",
     "MCPDeps",
@@ -42,7 +46,12 @@ __all__ = [
     "MCPServer",
     "ProtocolFeatures",
     "ResourceSecurity",
+    "TaskBackend",
+    "TaskMode",
+    "TaskSupport",
     "ToolAnnotation",
+    "ToolConfig",
     "ToolManagerScope",
     "UserMessage",
+    "tool_metadata",
 ]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, ClassVar, Final, Self
+from typing import Any, Final
 
 from mcp_types import (
     AudioContent,
@@ -23,6 +23,8 @@ from pydantic_ai.messages import FileUrl
 from pydantic_core import to_json, to_jsonable_python
 
 from fastapi_mcp_toolsets.protocol import MCPProtocolVersion
+
+from .config import ToolConfig
 
 __all__ = [
     "WRAPPED_RESULT_KEY",
@@ -47,9 +49,7 @@ MULTIMODAL_KINDS: Final[frozenset[str]] = frozenset(
 
 
 @dataclass(frozen=True, kw_only=True)
-class ToolAnnotation:
-    METADATA_KEY: ClassVar[str] = "mcp_tool_annotation"
-
+class ToolAnnotation(ToolConfig):
     title: str | None = None
     read_only_hint: bool | None = None
     destructive_hint: bool | None = None
@@ -57,17 +57,6 @@ class ToolAnnotation:
     open_world_hint: bool | None = None
     icons: Sequence[Icon] | None = None
     meta: Mapping[str, Any] | None = None
-
-    def as_metadata(self) -> dict[str, Any]:
-        return {self.METADATA_KEY: self}
-
-    @classmethod
-    def from_tool_def(cls, tool_def: ToolDefinition) -> Self | None:
-        match (tool_def.metadata or {}).get(cls.METADATA_KEY):
-            case cls() as annotation:
-                return annotation
-            case _:
-                return None
 
     def to_mcp(self) -> ToolAnnotations | None:
         hints = (self.title, self.read_only_hint, self.destructive_hint, self.idempotent_hint, self.open_world_hint)
@@ -139,7 +128,7 @@ def mcp_tool(
         output_schema=schema,
     )
 
-    match ToolAnnotation.from_tool_def(tool_def):
+    match ToolAnnotation.of(tool_def):
         case ToolAnnotation() as annotation:
             tool.title = annotation.title
             tool.icons = None if annotation.icons is None else [*annotation.icons]

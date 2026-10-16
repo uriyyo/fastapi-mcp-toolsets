@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from .versions import MCPProtocolVersion
 
 __all__ = [
+    "ExtensionResult",
     "MCPResponse",
     "as_request_id",
     "dump",
@@ -64,6 +65,10 @@ def dump_model(model: BaseModel) -> dict[str, Any]:
     return model.model_dump(by_alias=True, mode="json", exclude_none=True)
 
 
+class ExtensionResult(Result):
+    """A result of an extension's own shape, which the spec's per-version result tables do not know."""
+
+
 def jsonrpc_result(
     result: Result,
     *,
@@ -72,11 +77,12 @@ def jsonrpc_result(
     request_id: RequestId,
     server_info: Implementation,
 ) -> JSONRPCResponse:
-    data = serialize_server_result(
-        method,
-        protocol_version.version,
-        dump_model(result),
-    )
+    match result:
+        case ExtensionResult():
+            # The tables would strip its fields, or not have the method at all.
+            data = dump_model(result)
+        case _:
+            data = serialize_server_result(method, protocol_version.version, dump_model(result))
 
     meta = data.get("_meta") or {}
 

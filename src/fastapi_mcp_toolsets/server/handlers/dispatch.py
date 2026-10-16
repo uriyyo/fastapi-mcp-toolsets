@@ -8,6 +8,7 @@ from typing import Any, Union, cast, get_args, get_origin, get_type_hints
 
 from mcp.shared.exceptions import MCPError
 from mcp_types import METHOD_NOT_FOUND, PaginatedRequest, Request, Result
+from pydantic.fields import FieldInfo
 from pydantic_ai import UserError
 from pydantic_ai.capabilities.abstract import AbstractCapability
 
@@ -20,8 +21,10 @@ __all__ = [
     "DEFAULT_HANDLERS",
     "MCPHandler",
     "MCPHandlers",
+    "extension_request_types",
     "handle",
     "page",
+    "parse_extension_request",
 ]
 
 type MCPHandler = Callable[[Any, MCPContext], Awaitable[Result]]
@@ -45,16 +48,31 @@ class MCPHandlers(AbstractCapability[AgentDepsT]):
     """MCP method handlers by request type; a later capability's handler wins over an earlier one's."""
 
     handlers: dict[type[Request[Any, Any]], MCPHandler] = field(default_factory=dict)
+    # By method, for the requests the spec's own tables do not parse: an extension's.
+    requests: dict[str, type[Request[Any, Any]]] = field(default_factory=dict)
 
     def handler[H: MCPHandler](self, handler: H, /) -> H:
         for request_type in request_types(handler):
             self.handlers[request_type] = handler
+
+            match request_type.model_fields.get("method"):
+                case FieldInfo(default=str() as method):
+                    self.requests[method] = request_type
 
         return handler
 
 
 # The built-in handlers, which capabilities can override; filled in by the modules next to this one.
 DEFAULT_HANDLERS: MCPHandlers[Any] = MCPHandlers()
+
+
+def extension_request_types(ctx: MCPContext) -> dict[str, type[Request[Any, Any]]]:
+    requests = dict(DEFAULT_HANDLERS.requests)
+
+    for found in find_capabilities(ctx.capability, MCPHandlers):
+        requests |= found.requests
+
+    return requests
 
 
 async def handle(request: Request[Any, Any], ctx: MCPContext) -> Result:
@@ -68,6 +86,18 @@ async def handle(request: Request[Any, Any], ctx: MCPContext) -> Result:
             return await handler(request, ctx)
 
     raise MCPError(METHOD_NOT_FOUND, f"Method not supported: {request.method}")
+
+
+def parse_extension_request(method: str, params: Any, ctx: MCPContext) -> Request[Any, Any] | None:
+    """A request of an extension's method, or `None` when nothing serves the method.
+
+    Raises `ValidationError` for params the method rejects, as `parse_client_request` does.
+    """
+    match extension_request_types(ctx).get(method):
+        case None:
+            return None
+        case request_type:
+            return request_type.model_validate({"method": method, "params": params}, by_name=False)
 
 
 def page[T](

@@ -18,6 +18,7 @@ from fastapi_mcp_toolsets.server.inputs import (
 )
 
 from .dispatch import DEFAULT_HANDLERS, page
+from .tasks import start_task
 
 __all__ = [
     "call_tool",
@@ -50,6 +51,10 @@ async def call_tool(request: CallToolRequest, ctx: MCPContext) -> Result:
         and (rejection := validate_mcp_param_headers(tool_def.parameters_json_schema, arguments, ctx.headers))
     ):
         raise MCPError(rejection.code, rejection.message, rejection.data)
+
+    # A client that can poll may get a task to poll instead of waiting on the call.
+    if (task := await start_task(tool_def, arguments, ctx)) is not None:
+        return task
 
     match ctx.inputs.responses.get(APPROVAL_INPUT_KEY):
         case ElicitResult(action="accept"):

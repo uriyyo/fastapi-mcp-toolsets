@@ -87,6 +87,9 @@ class MCPContext:
 
     headers: Mapping[str, str] | None = None
 
+    # Set while a task runs the request, instead of the request answering inline.
+    task_id: str | None = None
+
     # Only an SSE response has one; without it, notifications are dropped.
     stream: MCPMessageStream | None = None
 

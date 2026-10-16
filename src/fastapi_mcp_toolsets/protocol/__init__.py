@@ -1,4 +1,5 @@
 from .jsonrpc import (
+    ExtensionResult,
     MCPResponse,
     as_request_id,
     dump,
@@ -12,6 +13,7 @@ from .pagination import page_cursor, paginate
 from .versions import MCPProtocolVersion, ProtocolFeatures
 
 __all__ = [
+    "ExtensionResult",
     "MCPProtocolVersion",
     "MCPResponse",
     "ProtocolFeatures",
