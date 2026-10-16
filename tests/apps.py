@@ -67,11 +67,31 @@ def build_server(**kwargs: object) -> MCPServer[Deps]:
         recipient = await ctx.deps.mcp.elicit("Email?", Recipient)
         return recipient.data.email if recipient.accepted and recipient.data else "nobody"
 
+    add_task_tools(server)
+    add_header_tools(server)
+
+    return server
+
+
+def add_task_tools(server: MCPServer[Deps]) -> None:
     @server.tool_plain(metadata=tool_metadata(TaskSupport()))
     async def slow(seconds: float) -> str:
         """Takes a while."""
         await anyio.sleep(seconds)
         return "slow done"
+
+    @server.tool(metadata=tool_metadata(TaskSupport(ttl=timedelta(minutes=1), poll_interval=timedelta(seconds=1))))
+    async def status_report(ctx: RunContext[Deps]) -> str:
+        """Says what it is doing, then waits to be observed."""
+        await ctx.deps.mcp.task_status("halfway")
+        await anyio.sleep(30)
+        return "never"
+
+    @server.tool
+    async def sign_in(ctx: RunContext[Deps]) -> str:
+        """Sends the user to a sign-in page."""
+        done = await ctx.deps.mcp.elicit_url("Sign in first", "https://example.com/login", key="login")
+        return "signed in" if done.accepted else done.action
 
     @server.tool(metadata=tool_metadata(TaskSupport(mode=TaskMode.REQUIRED)))
     async def slow_ask(ctx: RunContext[Deps]) -> str:
@@ -79,12 +99,12 @@ def build_server(**kwargs: object) -> MCPServer[Deps]:
         recipient = await ctx.deps.mcp.elicit("Email?", Recipient)
         return recipient.data.email if recipient.accepted and recipient.data else "nobody"
 
+
+def add_header_tools(server: MCPServer[Deps]) -> None:
     @server.tool_plain
     def tenant_name(tenant: Annotated[str, mcp_header("Tenant")], suffix: str = "") -> str:
         """The tenant, routed on by a header."""
         return tenant + suffix
-
-    return server
 
 
 def ui_server() -> MCPServer[Deps]:

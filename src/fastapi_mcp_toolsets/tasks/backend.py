@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import StrEnum
 from typing import Any, Protocol
 
@@ -45,6 +46,9 @@ class TaskMode(StrEnum):
 @dataclass(frozen=True, kw_only=True)
 class TaskSupport(ToolConfig):
     mode: TaskMode = TaskMode.OPTIONAL
+    # How long the task is kept after creation, and how often to poll; the backend's defaults when `None`.
+    ttl: timedelta | None = None
+    poll_interval: timedelta | None = None
 
 
 class TaskCall(BaseModel):
@@ -57,6 +61,9 @@ class TaskCall(BaseModel):
     client_info: Implementation | None = None
     headers: dict[str, str]
     log_level: LoggingLevel | None = None
+    # From the tool's `TaskSupport`; the backend's defaults when `None`.
+    ttl: timedelta | None = None
+    poll_interval: timedelta | None = None
 
 
 class TaskInputs(BaseModel):
@@ -125,3 +132,7 @@ class TaskBackend(ABC):
 
     @abstractmethod
     async def cancel(self, task_id: str) -> None: ...
+
+    @abstractmethod
+    async def set_status(self, task_id: str, message: str) -> None:
+        """What the running task says about itself, the `statusMessage` a client sees while it polls."""

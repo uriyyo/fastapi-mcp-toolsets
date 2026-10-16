@@ -1,4 +1,6 @@
 # Long-running tools answered with a task to poll, for clients that declare the tasks extension.
+from datetime import timedelta
+
 import anyio
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -19,10 +21,16 @@ from fastapi_mcp_toolsets import (
 server = MCPServer(deps_type=MCPDeps, name="reports", tasks=InProcessTaskBackend())
 
 
-@server.tool_plain(metadata=tool_metadata(TaskSupport(), ToolAnnotation(title="Build report", read_only_hint=True)))
-async def build_report(pages: int) -> str:
+@server.tool(
+    metadata=tool_metadata(TaskSupport(poll_interval=timedelta(seconds=1)), ToolAnnotation(title="Build report"))
+)
+async def build_report(ctx: RunContext[MCPDeps], pages: int) -> str:
     """Build a report; takes a while."""
-    await anyio.sleep(0.2 * pages)
+    for page in range(pages):
+        # Shown to a polling client as the task's `statusMessage`.
+        await ctx.deps.mcp.task_status(f"page {page + 1} of {pages}")
+        await anyio.sleep(0.2)
+
     return f"Report with {pages} pages"
 
 

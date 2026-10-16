@@ -17,6 +17,7 @@ from mcp_types import (
     CreateMessageResult,
     ElicitRequest,
     ElicitRequestFormParams,
+    ElicitRequestURLParams,
     ElicitResult,
     GetPromptRequest,
     GetPromptRequestParams,
@@ -52,8 +53,15 @@ from pydantic_ai.tool_manager import ToolManager
 
 from fastapi_mcp_toolsets._compat import ElicitationJsonSchema, validate_elicitation_schema
 from fastapi_mcp_toolsets.protocol import MCPProtocolVersion, jsonrpc_notification
+from fastapi_mcp_toolsets.tasks.backend import TaskBackend
 
-from .inputs import Elicitation, InputSession, InputUnavailableError, supports_form_elicitation
+from .inputs import (
+    Elicitation,
+    InputSession,
+    InputUnavailableError,
+    supports_form_elicitation,
+    supports_url_elicitation,
+)
 
 if TYPE_CHECKING:
     from .server import MCPServer
@@ -163,6 +171,28 @@ class MCPContext:
                 return Elicitation(action=action)
             case response:
                 raise MCPError(INVALID_PARAMS, f"Expected an elicitation result, got {type(response).__name__}")
+
+    async def elicit_url(self, message: str, url: str, *, key: str | None = None) -> Elicitation[None]:
+        """Send the user to a URL, e.g. to sign in or pay; answered once they are done there."""
+        self.require_input(
+            "URL elicitation",
+            supported=supports_url_elicitation(self.client_capabilities),
+        )
+
+        # No `elicitationId`: the key of the input request identifies it, and the answer comes with the retry.
+        request = ElicitRequest(params=ElicitRequestURLParams(message=message, url=url))
+
+        match self.inputs.take(request, kind="elicit-url", key=key):
+            case ElicitResult(action=action):
+                return Elicitation(action=action)
+            case response:
+                raise MCPError(INVALID_PARAMS, f"Expected an elicitation result, got {type(response).__name__}")
+
+    async def task_status(self, message: str) -> None:
+        """Tell the client what the task is up to, in `statusMessage` while it polls; nothing outside a task."""
+        match self.task_id, self.server.tasks:
+            case str() as task_id, TaskBackend() as backend:
+                await backend.set_status(task_id, message)
 
     async def sample(
         self,

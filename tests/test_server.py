@@ -26,7 +26,17 @@ async def test_handshake_list_and_call(connect) -> None:
         listed = await client.call("tools/list")
         tools = {tool["name"]: tool for tool in listed["result"]["tools"]}
 
-        assert set(tools) == {"add", "whoami", "progress", "ask", "slow", "slow_ask", "tenant_name"}
+        assert set(tools) == {
+            "add",
+            "whoami",
+            "progress",
+            "ask",
+            "slow",
+            "slow_ask",
+            "tenant_name",
+            "status_report",
+            "sign_in",
+        }
         assert tools["add"]["annotations"] == {"title": "Add", "readOnlyHint": True}
         assert tools["add"]["inputSchema"]["required"] == ["a", "b"]
 
@@ -188,3 +198,28 @@ async def test_apps_and_capability_settings(connect) -> None:
         }
         assert resources["result"]["resources"][0]["mimeType"] == "text/html;profile=mcp-app"
         assert page["result"]["contents"][0]["text"] == "<html>clock</html>"
+
+
+async def test_url_elicitation_is_a_retry(connect) -> None:
+    async with connect(build_app()) as client:
+        meta = modern_meta({"elicitation": {"url": {}}})
+
+        asked = await client.call("tools/call", {"name": "sign_in", "arguments": {}, "_meta": meta})
+        request = asked["result"]["inputRequests"]["login"]
+
+        assert request["params"] == {"mode": "url", "message": "Sign in first", "url": "https://example.com/login"}
+
+        declined = await client.call(
+            "tools/call",
+            {
+                "name": "sign_in",
+                "arguments": {},
+                "_meta": meta,
+                "requestState": asked["result"]["requestState"],
+                "inputResponses": {"login": {"action": "decline"}},
+            },
+        )
+        unsupported = await client.call("tools/call", {"name": "sign_in", "arguments": {}, "_meta": modern_meta()})
+
+        assert declined["result"]["content"][0]["text"] == "decline"
+        assert unsupported["result"]["isError"] is True

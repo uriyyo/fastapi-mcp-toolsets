@@ -40,6 +40,8 @@ class TaskRecord:
     created_at: datetime = field(default_factory=now)
     last_updated_at: datetime = field(default_factory=now)
     expires_at: datetime | None = None
+    ttl: timedelta | None = None
+    poll_interval: timedelta = timedelta(seconds=2)
     result: dict[str, Any] | None = None
     error: ErrorData | None = None
     input_requests: dict[str, InputRequest] | None = None
@@ -91,14 +93,6 @@ class InProcessTaskBackend(TaskBackend):
                 tg.cancel_scope.cancel()
 
         self._runner = None
-
-    @property
-    def ttl_ms(self) -> int | None:
-        return None if self.ttl is None else int(self.ttl.total_seconds() * 1000)
-
-    @property
-    def poll_interval_ms(self) -> int:
-        return int(self.poll_interval.total_seconds() * 1000)
 
     def _record(self, task_id: str) -> TaskRecord:
         self._sweep()
@@ -165,15 +159,22 @@ class InProcessTaskBackend(TaskBackend):
             "status_message": record.status_message,
             "created_at": record.created_at.isoformat(),
             "last_updated_at": record.last_updated_at.isoformat(),
-            "ttl_ms": self.ttl_ms,
-            "poll_interval_ms": self.poll_interval_ms,
+            "ttl_ms": None if record.ttl is None else int(record.ttl.total_seconds() * 1000),
+            "poll_interval_ms": int(record.poll_interval.total_seconds() * 1000),
         }
 
     async def create(self, call: TaskCall) -> CreateTaskResult:
         self._sweep()
 
         task_id = secrets.token_urlsafe(32)
-        record = TaskRecord(task_id=task_id, call=call, expires_at=None if self.ttl is None else now() + self.ttl)
+        ttl = self.ttl if call.ttl is None else call.ttl
+        record = TaskRecord(
+            task_id=task_id,
+            call=call,
+            expires_at=None if ttl is None else now() + ttl,
+            ttl=ttl,
+            poll_interval=self.poll_interval if call.poll_interval is None else call.poll_interval,
+        )
         self._records[task_id] = record
         self._start(record)
 
@@ -203,6 +204,12 @@ class InProcessTaskBackend(TaskBackend):
         record.input_requests = None
         record.settle("working")
         self._start(record)
+
+    async def set_status(self, task_id: str, message: str) -> None:
+        record = self._record(task_id)
+
+        if not record.done:
+            record.settle(record.status, message=message)
 
     async def cancel(self, task_id: str) -> None:
         record = self._record(task_id)

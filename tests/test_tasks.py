@@ -115,6 +115,30 @@ async def test_cancel_and_not_found(connect) -> None:
         assert undeclared["error"]["code"] == mcp_types.jsonrpc.MISSING_REQUIRED_CLIENT_CAPABILITY
 
 
+async def test_task_status_and_per_tool_timing(connect) -> None:
+    async with connect(tasks_app()) as client:
+        created = await client.call(
+            "tools/call", {"name": "status_report", "arguments": {}, "_meta": modern_meta(OPTED_IN)}
+        )
+        task = created["result"]
+
+        assert task["ttlMs"] == 60_000
+        assert task["pollIntervalMs"] == 1000
+
+        for _ in range(200):
+            polled = (await client.call("tasks/get", {"taskId": task["taskId"], "_meta": modern_meta(OPTED_IN)}))[
+                "result"
+            ]
+
+            if polled.get("statusMessage") == "halfway":
+                break
+
+            await anyio.sleep(0.01)
+
+        assert polled["status"] == "working"
+        assert polled["statusMessage"] == "halfway"
+
+
 # The backend on its own, with a runner standing in for the server.
 
 

@@ -44,6 +44,7 @@ __all__ = [
     "input_required_result",
     "read_inputs",
     "supports_form_elicitation",
+    "supports_url_elicitation",
 ]
 
 APPROVAL_INPUT_KEY: Final[str] = "approval"
@@ -170,6 +171,10 @@ def supports_form_elicitation(capabilities: ClientCapabilities) -> bool:
         case elicitation:
             # An empty capability means form mode.
             return elicitation.form is not None or elicitation.url is None
+
+
+def supports_url_elicitation(capabilities: ClientCapabilities) -> bool:
+    return capabilities.elicitation is not None and capabilities.elicitation.url is not None
 
 
 def approval_input(tool_name: str, arguments: Mapping[str, Any]) -> ElicitRequest:

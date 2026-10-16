@@ -96,7 +96,7 @@ async def start_task(tool_def: ToolDefinition, arguments: dict[str, Any], ctx: M
             return None
         case _, None | TaskSupport(mode=TaskMode.FORBIDDEN):
             return None
-        case backend, TaskSupport(mode=mode):
+        case backend, TaskSupport(mode=mode) as support:
             pass
 
     # A task's legs run through this same handler; they are answered inline. Extensions are negotiated per
@@ -120,6 +120,8 @@ async def start_task(tool_def: ToolDefinition, arguments: dict[str, Any], ctx: M
         client_info=ctx.client_info,
         headers=dict(ctx.headers or {}),
         log_level=ctx.log_level,
+        ttl=support.ttl,
+        poll_interval=support.poll_interval,
     )
 
     return await backend.create(call)
