@@ -31,6 +31,7 @@ dev = [
     "pydantic-ai-harness[codemode]>=0.54.0",
     "pydantic-ai-slim[mcp]>=2.54.0",
     "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
     "ruff>=0.16.10",
     "ty>=0.0.85",
     "uvicorn>=0.54.0",
@@ -82,14 +83,21 @@ ignore = [
     "FBT", # ignore flake8-boolean-trap
     "EM",  # ignore error message formatting
 ]
-per-file-ignores = { "examples/*" = [
-    "INP001", # examples are standalone scripts, not a package
-    "T201",   # examples may print
-] }
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
 
+# A plain table: an inline one may not span lines for the TOML parser pytest uses.
+[tool.ruff.lint.per-file-ignores]
+"examples/*" = [
+    "INP001", # examples are standalone scripts, not a package
+    "T201",   # examples may print
+]
+
 [tool.ty.environment]
 python = ".venv"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

@@ -86,9 +86,11 @@ class InProcessTaskBackend(TaskBackend):
             try:
                 yield
             finally:
-                self._runner, self._task_group = None, None
                 # Whatever is still running will never be polled again.
+                self._task_group = None
                 tg.cancel_scope.cancel()
+
+        self._runner = None
 
     @property
     def ttl_ms(self) -> int | None:
@@ -125,7 +127,9 @@ class InProcessTaskBackend(TaskBackend):
                 tg.start_soon(self._run, record)
 
     async def _run(self, record: TaskRecord) -> None:
-        assert self._runner is not None
+        # Swept before it could start, e.g. by a TTL of zero.
+        if self._runner is None or self._records.get(record.task_id) is not record:
+            return
 
         with anyio.CancelScope() as scope:
             record.scope = scope
