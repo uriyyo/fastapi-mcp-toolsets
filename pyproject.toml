@@ -1,7 +1,20 @@
 [project]
 name = "fastapi-mcp-toolsets"
 version = "0.1.0"
-description = "Add your description here"
+description = "Serve Pydantic AI tools, toolsets and agents as an MCP server from FastAPI"
+license = "MIT"
+keywords = ["mcp", "fastapi", "pydantic-ai", "model-context-protocol", "tools"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
