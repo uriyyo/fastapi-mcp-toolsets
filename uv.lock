@@ -372,33 +372,34 @@ wheels = [
 
 [[package]]
 name = "fastapi"
-version = "0.143.0"
+version = "0.165.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
+    { name = "anyio" },
     { name = "opentelemetry-api" },
     { name = "pydantic" },
     { name = "starlette" },
     { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0b/d7/6a8753ab6c1d432dc53703c3e1b92974a94531b7d047c32bbaae461ea844/fastapi-0.143.0.tar.gz", hash = "sha256:1acffe48206a80917cf7dac21992b5c44b25384e8902bf745c1fd9dabcf6c51f", size = 468391, upload-time = "2026-10-08T12:29:46.54Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/27/f9/e7820ef181026fea100bde02d811445bf8e883362d7092b6928767147056/fastapi-0.165.0.tar.gz", hash = "sha256:dd94d4128319c1e1d50535ab023ab698f850a4d2822f0e181747b46f4ff3c0ab", size = 557984, upload-time = "2026-11-18T19:15:37.076Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bd/f4/27e386913417ad32aae42bba48b0c0cce40e9ff2fba1a871ca2702c37324/fastapi-0.143.0-py3-none-any.whl", hash = "sha256:3e9395fd35276425b61b516a31fdd7c77fe2af83e41b4da22e30696fb1304c5d", size = 144665, upload-time = "2026-10-08T12:29:44.853Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/c1/3b74c030262a1b38b1fee180f80b4007bbc11c9ac12028cb18c7bcecaec9/fastapi-0.165.0-py3-none-any.whl", hash = "sha256:896f48462042bb4f162147eb8fac7e858753dc1f486765709baf105d70e4fc5b", size = 159475, upload-time = "2026-11-18T19:15:35.345Z" },
 ]
 
 [[package]]
 name = "fastapi-injected"
-version = "0.3.6"
+version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
     { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d8/b2/d6f2a4f272ac06605a4b7f5d06698d46dc21e0cc2b82ebf8ad51b405fa50/fastapi_injected-0.3.6.tar.gz", hash = "sha256:f7fb132615d88c8d260ddc1db9711c012f06c56baa19e2a1fe592348d2b1c27d", size = 84455, upload-time = "2026-10-08T22:17:04.995Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/45/ff/5ea60613094177f4ed46fbf36f46c0fbb5b01e9caaa37df134dd94212c0b/fastapi_injected-0.6.0.tar.gz", hash = "sha256:b8ca52540c5802cb68fb2b89b07d4e2dc8d7bd5c2eb9f73f73764f76f8c90211", size = 112908, upload-time = "2026-11-22T12:56:27.757Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/61/1b/52f7c33b3f891b82d7b4522f9da37ed03605306ab3220b7a7737c3681949/fastapi_injected-0.3.6-py3-none-any.whl", hash = "sha256:e66e8d04f029e884686e9a3f4a841650b248fd18c1b20480be0fd494d7b551a9", size = 30299, upload-time = "2026-10-08T22:17:03.854Z" },
+    { url = "https://files.pythonhosted.org/packages/58/90/6cd688dd1c529096959778edafd08dd4b5badcdeac55dd355ff717e5f691/fastapi_injected-0.6.0-py3-none-any.whl", hash = "sha256:3093e7baedb5c1ed9e1ed017ebbf854db8b5fe4de32a5a258a97e081dde91f80", size = 42034, upload-time = "2026-11-22T12:56:26.82Z" },
 ]
 
 [[package]]
@@ -434,7 +435,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.143.0" },
-    { name = "fastapi-injected", specifier = ">=0.3.6" },
+    { name = "fastapi-injected", specifier = ">=0.6.0" },
     { name = "httpx2", extras = ["ws"], marker = "extra == 'stdio'", specifier = ">=2.13.1" },
     { name = "mcp", specifier = ">=2.3.0" },
     { name = "pydantic-ai-slim", specifier = ">=2.54.0" },

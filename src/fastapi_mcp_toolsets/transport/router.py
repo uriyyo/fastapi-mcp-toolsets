@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, FastAPI, Header, Request, Response, stat
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
-from fastapi_injected import DependencyResolutionError, init_inject_scope
+from fastapi_injected import DependencyResolutionError
+from fastapi_injected.fastapi import bind_injection_ctx
 from mcp.server.streamable_http import check_accept_headers
 from mcp.server.transport_security import TransportSecurityMiddleware, TransportSecuritySettings
 from mcp.shared.inbound import (
@@ -180,7 +181,7 @@ class MCPRouter(APIRouter):
             summary="MCP endpoint",
             description=f"Serves the `{server.name}` MCP server over Streamable HTTP.",
             responses=OPENAPI_RESPONSES,
-            dependencies=[Depends(init_inject_scope), *self.dependencies_],
+            dependencies=[Depends(bind_injection_ctx), *self.dependencies_],
         )(self._handle_post)
 
         for extension in self.extensions:

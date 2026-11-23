@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from fastapi import Request as StarletteRequest
-from fastapi_injected import push_inject_scope
+from fastapi_injected import injection_ctx
 from mcp.shared.exceptions import MCPError
 from mcp.shared.inbound import MCP_NAME_HEADER, decode_header_value
 from mcp_types import HEADER_MISMATCH, METHOD_NOT_FOUND, CallToolRequest, CallToolRequestParams, CallToolResult
@@ -149,7 +149,7 @@ async def run_task(server: MCPServer[Any], task_id: str, call: TaskCall, inputs:
     request = CallToolRequest(params=CallToolRequestParams(name=call.tool, arguments=call.arguments))
 
     async with (
-        push_inject_scope(request=task_request(server, call)),
+        injection_ctx(request=task_request(server, call)),
         server.build_context(
             protocol_version=MCPProtocolVersion(call.protocol_version),
             client_capabilities=call.client_capabilities,

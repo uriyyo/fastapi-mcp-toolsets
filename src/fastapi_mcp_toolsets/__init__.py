@@ -1,3 +1,4 @@
+from fastapi_injected.fastapi import install_dependency_cache
 from mcp_types import Icon, Implementation
 
 from .features import (
@@ -27,6 +28,9 @@ from .server import (
 )
 from .tasks import InProcessTaskBackend, TaskBackend, TaskMode, TaskSupport
 from .transport import MCPExtension, MCPRoute, MCPRouter
+
+# routes bind an injection context without `add_injection(app)`, which needs the cache it installs
+install_dependency_cache()
 
 __all__ = [
     "APP_MIME_TYPE",

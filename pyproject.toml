@@ -19,7 +19,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.143.0",
-    "fastapi-injected>=0.3.6",
+    "fastapi-injected>=0.6.0",
     "mcp>=2.3.0",
     "pydantic-ai-slim>=2.54.0",
 ]

@@ -12,7 +12,8 @@ from typing import Annotated, Any, Generic, Self, cast, overload
 
 from fastapi import Depends, FastAPI
 from fastapi import Request as StarletteRequest
-from fastapi_injected import init_inject_scope, push_inject_scope, resolve
+from fastapi_injected import injection_ctx, resolve
+from fastapi_injected.fastapi import bind_injection_ctx
 from mcp.server.mcpserver.resources.templates import DEFAULT_RESOURCE_SECURITY, ResourceSecurity
 from mcp.server.request_state import RequestStateCodec
 from mcp.shared.exceptions import MCPError
@@ -356,7 +357,7 @@ class MCPServer(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't hav
     async def lifespan(self, app: FastAPI | None = None) -> AsyncGenerator[Self]:
         self.app = app
 
-        async with push_inject_scope(app=app), self:
+        async with injection_ctx(app=app), self:
             yield self
 
     async def __aenter__(self) -> Self:
@@ -604,7 +605,7 @@ class MCPServer(Generic[AgentDepsT]):  # noqa: UP046 - type parameters can't hav
     async def context(
         self,
         request: StarletteRequest,
-        _scope: Annotated[None, Depends(init_inject_scope)] = None,
+        _scope: Annotated[None, Depends(bind_injection_ctx)] = None,
     ) -> AsyncGenerator[MCPContext]:
         """A FastAPI dependency: the server's context for the request, to call its tools from a route."""
         async with self.build_context(headers=request.headers) as ctx:
